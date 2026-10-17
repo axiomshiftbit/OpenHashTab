@@ -11,7 +11,7 @@ permissions:
 
 jobs:
   osv:
-    name: OSV source and build dependencies
+    name: OSV and NVD dependency checks
     runs-on: ubuntu-24.04
     timeout-minutes: 15
     steps:
@@ -21,5 +21,5 @@ jobs:
           persist-credentials: false
       - name: Test vulnerability checking failure modes
         run: python3 -m unittest discover -s tests -p 'test_security.py' -v
-      - name: Query OSV for pinned commits and package versions
-        run: python3 automation/Check-Vulnerabilities.py
+      - name: Query OSV and NVD, verify excluded vulnerable modules
+        run: python3 automation/Check-Vulnerabilities.py --nvd

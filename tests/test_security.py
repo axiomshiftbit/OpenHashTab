@@ -11,6 +11,16 @@ spec.loader.exec_module(scanner)
 
 
 class VulnerabilityQueries(unittest.TestCase):
+    def test_nvd_new_advisory_cannot_be_silently_excluded(self):
+        data = {"vulnerabilities": [{"cve": {"id": "CVE-2099-12345", "descriptions": []}}], "totalResults": 1}
+        with patch.object(scanner, "check_mbedtls_build"), patch.object(scanner.time, "sleep"), patch.object(scanner.urllib.request, "urlopen", side_effect=lambda *a, **kw: io.BytesIO(json.dumps(data).encode())):
+            self.assertEqual(scanner.nvd_findings(), 1)
+
+    def test_nvd_exceptions_require_unchanged_build_inputs(self):
+        with patch.object(pathlib.Path, "read_bytes", return_value=b"changed source list"):
+            with self.assertRaisesRegex(ValueError, "build changed"):
+                scanner.check_mbedtls_build()
+
     def test_pagination_deduplicates_and_ignores_withdrawn(self):
         pages = [
             {"next_page_token": "second"},
