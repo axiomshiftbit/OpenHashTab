@@ -9,6 +9,7 @@
 #include <filesystem>
 #include <fstream>
 #include <cstdio>
+#include <winioctl.h>
 #include "AdditionalHashVectors.h"
 #include "OfficialHashVectors.h"
 #include "StreamingHashVectors.h"
@@ -358,6 +359,36 @@ static void file_hashing() {
   }
 }
 static INT_PTR CALLBACK empty_dialog(HWND, UINT, WPARAM, LPARAM) { return FALSE; }
+static void large_file_hashing() {
+  // Exercise OVERLAPPED.OffsetHigh with a nonzero tail beyond 4 GiB.
+  const auto file = root / L"sparse-over-4GiB.bin";
+  const auto handle = CreateFileW(file.c_str(), GENERIC_WRITE, 0, nullptr, CREATE_NEW, FILE_ATTRIBUTE_NORMAL, nullptr);
+  check(handle != INVALID_HANDLE_VALUE, "create large sparse fixture");
+  DWORD transferred{};
+  check(DeviceIoControl(handle, FSCTL_SET_SPARSE, nullptr, 0, nullptr, 0, &transferred, nullptr) != FALSE,
+      "mark fixture as sparse");
+  LARGE_INTEGER offset{};
+  offset.QuadPart = 1ULL << 32;
+  check(SetFilePointerEx(handle, offset, nullptr, FILE_BEGIN) != FALSE, "seek beyond 32-bit file offset");
+  constexpr char tail[] = "OpenHashTab offset";
+  check(WriteFile(handle, tail, sizeof(tail) - 1, &transferred, nullptr) != FALSE && transferred == sizeof(tail) - 1,
+      "write nonzero sparse-file tail");
+  CloseHandle(handle);
+  Coordinator coordinator({file.wstring()});
+  for (auto& enabled : coordinator.settings.algorithms) enabled.SetNoSave(false);
+  const auto algorithm = LegacyHashAlgorithm::ByName("SHA-256");
+  coordinator.settings.algorithms[algorithm->Idx()].SetNoSave(true);
+  coordinator.AddFiles();
+  coordinator.ProcessFiles();
+  coordinator.WaitForCompletion();
+  check(coordinator.GetFiles().size() == 1, "large file retained");
+  const auto& task = coordinator.GetFiles().front();
+  check(task->GetSize() == (1ULL << 32) + sizeof(tail) - 1, "64-bit file length");
+  check(task->GetError() == ERROR_SUCCESS, "large asynchronous file read");
+  const auto expected = utl::HashStringToBytes(std::string_view("d1885540b2b008f0bb739130d1712a275c034811aa2828648f4bd931a371d6e3"));
+  check(task->GetHashResult()[algorithm->Idx()] == expected, "hash includes data beyond 4 GiB");
+  std::puts("PASS: asynchronous SHA-256 of a 4 GiB + 18 byte sparse file");
+}
 static void dialog_templates() {
   for (const int resource : {101, 102}) {
     const auto dialog = wnd::CreateDialogFromChildDialogResourceParam(
@@ -399,6 +430,7 @@ int main() {
     ed2k_boundaries();
     parsers();
     file_hashing();
+    large_file_hashing();
     dialog_templates();
     clipboard();
     std::filesystem::remove_all(utl::MakePathLongCompatible(root.wstring()));

@@ -57,7 +57,7 @@ int main() {
       QueryPerformanceCounter(&begin);
 
       ctx.Update(p, k_size);
-      uint8_t hash[LegacyHashAlgorithm::k_max_size + 4];
+      uint8_t hash[LegacyHashAlgorithm::k_max_size + 4]{};
 #ifndef NDEBUG
       const auto size = h.GetSize();
       hash[size - 4] = 0xFF;
