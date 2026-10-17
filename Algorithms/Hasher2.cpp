@@ -604,7 +604,7 @@ public:
 
   static size_t ParamCheck(const uint64_t* params)
   {
-    if (params[0] > std::numeric_limits<size_t>::max() || params[1] > std::numeric_limits<size_t>::max())
+    if (params[0] > std::numeric_limits<size_t>::max() || params[1] > std::numeric_limits<size_t>::max() || params[1] % 8 != 0)
       return 0;
     ParallelHash_Instance ctx{};
     const auto result = ParallelHash128_Initialize(&ctx, (size_t)params[0], (size_t)params[1], nullptr, 0);
@@ -618,7 +618,7 @@ public:
 
   void Update(const void* data, size_t size)
   {
-    ParallelHash128_Update(&ctx, (const unsigned char*)data, size);
+    ParallelHash128_Update(&ctx, (const unsigned char*)data, size * 8);
   }
 
   void Finish(uint8_t* out)
@@ -658,7 +658,7 @@ public:
 
   void Update(const void* data, size_t size)
   {
-    ParallelHash256_Update(&ctx, (const unsigned char*)data, size);
+    ParallelHash256_Update(&ctx, (const unsigned char*)data, size * 8);
   }
 
   void Finish(uint8_t* out)

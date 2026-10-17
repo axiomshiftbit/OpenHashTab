@@ -77,7 +77,12 @@ static void hashing() {
     {"SHA-384", "abc", "cb00753f45a35e8bb5a03d699ac65007272c32ab0eded1631a8b605a43ff5bed8086072ba1e7cc2358baeca134c825a7"},
     {"SHA-512", "abc", "ddaf35a193617abacc417349ae20413112e6fa4e89a97ea20a9eeee64b55d39a2192992a274fc1a836ba3c23a3feebbd454d4423643ce80e2a9ac94fa54ca49f"},
     {"SHA3-256", "abc", "3a985da74fe225b2045c172d6bd390bd855f086e3e9d525b46bfe24511431532"},
-    {"BLAKE3", "", "af1349b9f5f9a1a6a0404dea36dcc9499bcb25c9adc112b7cc9a93cae41f3262"}
+    {"BLAKE3", "", "af1349b9f5f9a1a6a0404dea36dcc9499bcb25c9adc112b7cc9a93cae41f3262"},
+    // Independently composed from SHAKE/cSHAKE per NIST SP 800-185, B=8192.
+    {"PH128-264", "", "922fa19859b2c701f0d9d8e3eed3cb7fb8910af6220bff0f6b8f062dbfa3bd3331"},
+    {"PH128-264", "abc", "493a6004492b1b7b14be32fe0bbb4f780183cb8311c17f9ac2ab0454d8940b1f33"},
+    {"PH256-528", "", "7c432b8652dc77d082097f80d1fa29b22e3e061d284c9574cdf80750a91bcf135db4930ee8cef82b46751f6347f3262732b0bb91cf38835a2c61d17af6510d203de6"},
+    {"PH256-528", "abc", "44d4ea7d0c3dc171711d98bfce531a1bec23c160c6d6ed9379a1b671f025e66083264e7bcd825d497eda24b88220897e2dbfd86b24c915f03a91addd75f13275511d"}
   };
   for (const auto& v : vectors) {
     const auto algorithm = LegacyHashAlgorithm::ByName(v.name);
