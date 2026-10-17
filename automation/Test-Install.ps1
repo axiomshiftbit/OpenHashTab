@@ -1,7 +1,8 @@
 [CmdletBinding()]
 param(
     [ValidateSet('BeforeReboot', 'AfterReboot', 'All')][string]$Stage = 'All',
-    [ValidateSet('x64', 'arm64')][string]$Architecture = 'x64'
+    [ValidateSet('x64', 'arm64')][string]$Architecture = 'x64',
+    [ValidateSet('Both', 'Machine', 'User')][string]$InstallScope = 'Both'
 )
 $ErrorActionPreference = 'Stop'
 if ($env:OHT_DISPOSABLE_VM -notlike 'windows-11-*' -and
@@ -87,12 +88,19 @@ function Assert-Installed([string]$Scope, [string]$Product) {
 function Assert-Removed([string]$Product) {
     if ($installer.ProductState($Product) -eq 5) { throw "Product remains installed: $Product" }
 }
+if ($InstallScope -eq 'Both') {
+    & $PSCommandPath -Stage $Stage -Architecture $Architecture -InstallScope Machine
+    if ($Stage -ne 'AfterReboot') {
+        & "$PSScriptRoot\Test-UserInstall.ps1" -Architecture $Architecture
+    }
+    return
+}
 if ($Stage -ne 'AfterReboot') {
     $wrongArch = if ($Architecture -eq 'x64') { 'ARM64' } else { 'x64' }
     $wrongPackage = (Get-Item "$root\installers\OpenHashTab_Machine_$wrongArch.msi").FullName
     Run-Msi "/i `"$wrongPackage`"" 'wrong-architecture-rejected' @(1603, 1633)
 }
-foreach ($scope in @('Machine', 'User')) {
+foreach ($scope in @($InstallScope)) {
     $package = (Get-Item "$root\installers\OpenHashTab_${scope}_${Architecture}.msi").FullName
     $product = Read-MsiProperty $package 'ProductCode'
     $packageVersion = Read-MsiProperty $package 'ProductVersion'
