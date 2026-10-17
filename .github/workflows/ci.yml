@@ -96,14 +96,16 @@ jobs:
           queries: security-extended
           debug: true
           db-location: ${{ runner.temp }}/codeql-database
-      - name: Install SDK and WDK
+      - name: Verify the installed SDK and WDK
         shell: pwsh
         run: |
           $ErrorActionPreference = 'Stop'
-          foreach ($id in @('Microsoft.WindowsSDK.10.0.26100', 'Microsoft.WindowsWDK.10.0.26100')) {
-            winget install --source winget --exact --id $id --disable-interactivity --accept-source-agreements --accept-package-agreements
-            if ($LASTEXITCODE -ne 0 -and $LASTEXITCODE -ne -1978335189) { throw "winget failed: $id ($LASTEXITCODE)" }
+          $sdk = (Get-Item 'HKLM:\SOFTWARE\WOW6432Node\Microsoft\Microsoft SDKs\Windows').GetValue('CurrentInstallFolder')
+          foreach ($architecture in @('x86', 'x64', 'arm64')) {
+            $library = Join-Path $sdk "Lib/10.0.26100.0/um/$architecture/ntdllp.lib"
+            if (-not (Test-Path $library)) { throw "The installed WDK is incomplete: $library" }
           }
+          if (-not (Test-Path (Join-Path $sdk 'Include/10.0.26100.0/um/Windows.h'))) { throw 'Windows SDK 26100 is missing.' }
           'WindowsTargetPlatformVersion=10.0.26100.0' >> $env:GITHUB_ENV
       - name: Build and run native x86/x64 tests
         shell: pwsh
