@@ -76,6 +76,8 @@ jobs:
           if ($env:GITHUB_REF_TYPE -eq 'tag' -and $env:GITHUB_REF_NAME -ne "v$version") {
             throw 'The release tag must match VERSION.'
           }
+      - name: Verify the checked XKCP source patch
+        run: python -m unittest discover -s tests -p test_xkcp_patch.py -v
       - name: Initialize CodeQL for compiled C/C++
         uses: github/codeql-action/init@f051dc808ef3645eb0d08647ec751634ec2304ac
         with:

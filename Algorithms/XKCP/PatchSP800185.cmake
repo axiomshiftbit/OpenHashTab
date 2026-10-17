@@ -11,11 +11,14 @@ set(expected_h "9679a718030d5fc5bbb9adc7df10a3e18f371927e18c1fe73c3fa1621b4c5d06
 set(expected_inc "e7b5206cee0e3ae5fa7e2fc7488773e455a8053491abefcd01b54976193e1042")
 foreach(extension c h inc)
     set(source "${SP800185_SOURCE_DIR}/SP800-185.${extension}")
-    file(SHA256 "${source}" actual)
+    file(READ "${source}" content)
+    # Windows Git checkouts may use CRLF. Verify the canonical source text
+    # and patch the same text so line-based replacements work on every host.
+    string(REPLACE "\r\n" "\n" content "${content}")
+    string(SHA256 actual "${content}")
     if(NOT actual STREQUAL expected_${extension})
         message(FATAL_ERROR "XKCP SP800-185.${extension} changed: review the 64-bit length patch")
     endif()
-    file(READ "${source}" content)
     if(extension STREQUAL "h")
         string(REPLACE "size_t totalInputSize;" "uint64_t totalInputSize;" content "${content}")
     elseif(extension STREQUAL "inc")
