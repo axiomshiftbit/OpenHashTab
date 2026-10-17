@@ -225,6 +225,7 @@ void MainDialog::ListPopupMenu(POINT pt) {
     _hwnd,
     nullptr
   );
+  DestroyMenu(menu);
 
   if (!selection)
     return;

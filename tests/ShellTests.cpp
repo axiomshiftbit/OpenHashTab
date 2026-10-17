@@ -2,9 +2,11 @@
 #define WIN32_LEAN_AND_MEAN
 #include <Windows.h>
 #include <ShlObj.h>
+#include <CommCtrl.h>
 #include <cstdio>
 #include <string>
 #include <cstring>
+#include "../OpenHashTab/OpenHashTab/resource.h"
 
 static bool ok(HRESULT result, const char* operation) {
   if (FAILED(result)) std::fprintf(stderr, "FAIL: %s (0x%08lx)\n", operation, static_cast<unsigned long>(result));
@@ -14,6 +16,61 @@ static BOOL CALLBACK add_page(HPROPSHEETPAGE page, LPARAM count) {
   ++*reinterpret_cast<unsigned*>(count);
   DestroyPropertySheetPage(page);
   return TRUE;
+}
+static BOOL CALLBACK find_dialog(HWND window, LPARAM result) {
+  if (GetDlgItem(window, IDC_HASH_LIST)) {
+    *reinterpret_cast<HWND*>(result) = window;
+    return FALSE;
+  }
+  return TRUE;
+}
+static bool menu_closed = false;
+static void CALLBACK close_menu(HWND, UINT, UINT_PTR timer, DWORD) {
+  menu_closed = EndMenu() != FALSE;
+  KillTimer(nullptr, timer);
+}
+static bool window_and_popup_menus(IContextMenu* context) {
+  CMINVOKECOMMANDINFO command{};
+  command.cbSize = sizeof(command);
+  command.lpVerb = MAKEINTRESOURCEA(0);
+  command.nShow = SW_SHOWNORMAL;
+  if (!ok(context->InvokeCommand(&command), "invoke context menu command")) return false;
+  HWND window{};
+  EnumThreadWindows(GetCurrentThreadId(), find_dialog, reinterpret_cast<LPARAM>(&window));
+  if (!window) return false;
+  const auto list = GetDlgItem(window, IDC_HASH_LIST);
+  for (unsigned attempt = 0; attempt < 100 && ListView_GetItemCount(list) == 0; ++attempt) {
+    MSG message{};
+    while (PeekMessageW(&message, nullptr, 0, 0, PM_REMOVE)) {
+      TranslateMessage(&message);
+      DispatchMessageW(&message);
+    }
+    Sleep(50);
+  }
+  if (ListView_GetItemCount(list) == 0) return false;
+  DWORD before{};
+  for (unsigned attempt = 0; attempt < 18; ++attempt) {
+    // Warm up common-control resources before checking USER handle growth.
+    if (attempt == 2) before = GetGuiResources(GetCurrentProcess(), GR_USEROBJECTS);
+    menu_closed = false;
+    const auto timer = SetTimer(nullptr, 0, 50, close_menu);
+    if (!timer) return false;
+    NMITEMACTIVATE click{};
+    click.hdr = {list, IDC_HASH_LIST, NM_RCLICK};
+    click.ptAction = {10, 10};
+    SendMessageW(window, WM_NOTIFY, IDC_HASH_LIST, reinterpret_cast<LPARAM>(&click));
+    KillTimer(nullptr, timer);
+    if (!menu_closed) return false;
+  }
+  const auto after = GetGuiResources(GetCurrentProcess(), GR_USEROBJECTS);
+  if (!before || after > before + 2) {
+    std::fprintf(stderr, "FAIL: popup menu USER handles grew from %lu to %lu\n", before, after);
+    return false;
+  }
+  SendMessageW(window, WM_CLOSE, 0, 0);
+  if (IsWindow(window)) return false;
+  std::puts("PASS: context command opens/closes a window; repeated popup menus release USER handles");
+  return true;
 }
 int wmain(int argc, wchar_t** argv) {
   SetErrorMode(SEM_FAILCRITICALERRORS | SEM_NOGPFAULTERRORBOX);
@@ -56,6 +113,7 @@ int wmain(int argc, wchar_t** argv) {
   if (context->GetCommandString(1, GCS_HELPTEXTW, nullptr, help, 128) != E_INVALIDARG) return 1;
   // Verify that COM loaded the registration requested by the installer test.
   if (!GetModuleHandleW(argv[1])) { std::fprintf(stderr, "FAIL: unexpected COM DLL\n"); return 1; }
+  if (!window_and_popup_menus(context)) return 1;
   DestroyMenu(menu);
   context->Release(); properties->Release(); extension->Release(); data->Release();
   CoTaskMemFree(absolute); CoTaskMemFree(parent);
