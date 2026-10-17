@@ -198,8 +198,10 @@
             <Component Id="Bee2License">
                 <File Id="Bee2License.txt" Name="Bee2-LICENSE.txt"
                     Source="..\Algorithms\bee2\bee2\LICENSE.txt" KeyPath="yes" />
+            </Component>
+            <Component Id="Bee2Authors">
                 <File Id="Bee2Authors.md" Name="Bee2-AUTHORS.md"
-                    Source="..\Algorithms\bee2\bee2\AUTHORS.md" />
+                    Source="..\Algorithms\bee2\bee2\AUTHORS.md" KeyPath="yes" />
             </Component>
             <Component Id="Benchmark">
                 <File Id="Benchmark.exe" Source="$(var.BuildDirectory)\Benchmark.exe" KeyPath="yes" />
