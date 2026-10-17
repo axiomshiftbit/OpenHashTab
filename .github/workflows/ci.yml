@@ -57,7 +57,7 @@ jobs:
           g++ -std=c++20 -g -fsanitize=address,undefined -I OpenHashTab/OpenHashTab tests/EncodingTests.cpp OpenHashTab/OpenHashTab/base64.cpp -o "$RUNNER_TEMP/encoding-tests"
           "$RUNNER_TEMP/encoding-tests"
       - name: Test the CodeQL result gate
-        run: python3 -m unittest discover -s tests -p test_codeql.py -v
+        run: python3 -m unittest discover -s tests -p 'test_codeql*.py' -v
       - name: Verify independent algorithm vectors
         run: python3 tests/GenerateHashVectors.py --check
 
@@ -88,12 +88,14 @@ jobs:
         shell: powershell
         run: ./tests/Test-DefenderScan.ps1
       - name: Initialize CodeQL for compiled C/C++
+        id: codeql
         uses: github/codeql-action/init@f051dc808ef3645eb0d08647ec751634ec2304ac
         with:
           languages: c-cpp
           build-mode: manual
           queries: security-extended
           debug: true
+          db-location: ${{ runner.temp }}/codeql-database
       - name: Install SDK and WDK
         shell: pwsh
         run: |
@@ -105,7 +107,12 @@ jobs:
           'WindowsTargetPlatformVersion=10.0.26100.0' >> $env:GITHUB_ENV
       - name: Build and run native x86/x64 tests
         shell: pwsh
-        run: ./build_all.ps1
+        run: |
+          # CodeQL documents Microsoft extension support through VS 2022.
+          # Do not silently switch the STL/ATL headers when a newer VS is installed.
+          $env:VSINSTALLDIR = & vswhere -latest -version '[17.0,18.0)' -products * -requires Microsoft.VisualStudio.Component.VC.Tools.x86.x64 -property installationPath
+          if (-not $env:VSINSTALLDIR) { throw 'Visual Studio 2022 is required for the analyzed build.' }
+          ./build_all.ps1
       - name: Analyze compiled C/C++ with CodeQL
         uses: github/codeql-action/analyze@f051dc808ef3645eb0d08647ec751634ec2304ac
         with:
@@ -114,6 +121,17 @@ jobs:
       - name: Reject CodeQL findings
         shell: pwsh
         run: python automation/Check-CodeQL.py "$env:RUNNER_TEMP/codeql-results"
+      - name: Require complete C/C++ extraction
+        shell: pwsh
+        env:
+          CODEQL_CLI: ${{ steps.codeql.outputs.codeql-path }}
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $PSNativeCommandUseErrorActionPreference = $true
+          & $env:CODEQL_CLI pack ci automation/codeql
+          & $env:CODEQL_CLI query run --database="$env:RUNNER_TEMP/codeql-database/cpp" --output="$env:RUNNER_TEMP/extraction.bqrs" automation/codeql/ExtractionCoverage.ql
+          & $env:CODEQL_CLI bqrs decode --format=csv --output="$env:RUNNER_TEMP/extraction.csv" "$env:RUNNER_TEMP/extraction.bqrs"
+          python automation/Check-CodeQLCoverage.py "$env:RUNNER_TEMP/extraction.csv"
       - name: Check restored NuGet packages and source dependencies
         run: python automation/Check-Vulnerabilities.py --assets
       - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
