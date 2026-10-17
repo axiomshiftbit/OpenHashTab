@@ -30,6 +30,11 @@ function Assert-DisplayedHash([Diagnostics.Process]$Process) {
         }
         Start-Sleep -Milliseconds 100
     }
+    Write-Host "Standalone window: $($Process.MainWindowTitle), handle $($Process.MainWindowHandle)"
+    $elements | ForEach-Object {
+        Write-Host "$($_.Current.ControlType.ProgrammaticName) id=$($_.Current.AutomationId) name=$($_.Current.Name)"
+        Write-Host "  Patterns: $(($_.GetSupportedPatterns() | ForEach-Object ProgrammaticName) -join ', ')"
+    }
     throw 'The application window did not expose the expected SHA-256 result through accessibility.'
 }
 function Read-MsiProperty([string]$Path, [string]$Name) {
