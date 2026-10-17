@@ -37,3 +37,16 @@ class CodeQLResults(unittest.TestCase):
     def test_missing_file_cannot_pass(self):
         with tempfile.TemporaryDirectory() as directory, self.assertRaises(ValueError):
             gate.main(directory)
+
+    def test_unsuccessful_invocation_cannot_pass(self):
+        with self.assertRaisesRegex(ValueError, "unsuccessful"):
+            gate.findings({"runs": [{"tool": {"driver": {"rules": [{"id": "example"}]}},
+                                    "invocations": [{"executionSuccessful": False}]}]})
+
+    def test_extraction_diagnostic_cannot_pass(self):
+        for level, identifier in (("error", "extraction"), ("warning", "extraction"),
+                                  ("note", "cpp/diagnostics/failed-extractor-invocations")):
+            with self.subTest(level=level):
+                self.assertEqual(gate.findings({"runs": [{"tool": {"driver": {"rules": [{"id": "example"}]}},
+                    "invocations": [{"executionSuccessful": True, "toolExecutionNotifications": [
+                        {"level": level, "descriptor": {"id": identifier}}]}]}]}), 1)

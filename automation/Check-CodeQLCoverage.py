@@ -13,7 +13,7 @@ def check(rows, sources):
         path = row['path']
         if path in files:
             raise ValueError(f'Duplicate extraction row: {path}')
-        counts = {key: int(row[key]) for key in ('completed', 'crashed', 'functions')}
+        counts = {key: int(row[key]) for key in ('completed', 'crashed', 'parsed', 'functions')}
         if any(value < 0 for value in counts.values()):
             raise ValueError(f'Invalid extraction counts: {path}')
         files[path] = counts
@@ -21,9 +21,9 @@ def check(rows, sources):
             failures.append(f"{path}: {counts['crashed']} crashed extractor invocations")
     if not sources:
         raise ValueError('No tracked C/C++ sources found')
-    for source in sources:
-        if not files.get(source, {}).get('completed'):
-            failures.append(f'{source}: no completed extraction')
+    for source in sorted(sources):
+        if not files.get(source, {}).get('completed') or not files.get(source, {}).get('parsed'):
+            failures.append(f'{source}: no completed source extraction')
     # The JSON adapter is shared by both network entry points and is header-only.
     json_header = 'OpenHashTab/OpenHashTab/json.h'
     if not files.get(json_header, {}).get('functions'):

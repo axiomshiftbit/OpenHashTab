@@ -64,7 +64,7 @@ jobs:
   build:
     if: ${{ inputs.diagnostic_build_run == '' }}
     name: Build x86, x64 and ARM64
-    runs-on: windows-2025
+    runs-on: windows-2022
     timeout-minutes: 50
     permissions:
       contents: read

@@ -15,6 +15,17 @@ def findings(document):
         rules = {rule["id"]: rule for component in components for rule in component.get("rules", [])}
         if not rules:
             raise ValueError("SARIF contains no analyzed rules")
+        for invocation in run.get("invocations", []):
+            if invocation.get("executionSuccessful") is False:
+                raise ValueError("SARIF reports an unsuccessful analysis invocation")
+            for notification in invocation.get("toolExecutionNotifications", []):
+                identifier = notification.get("descriptor", {}).get("id", "unknown")
+                level = notification.get("level", "warning")
+                if level in ("warning", "error") or identifier == "cpp/diagnostics/failed-extractor-invocations":
+                    # Do not print diagnostic snippets: third-party headers may
+                    # contain credentials unrelated to the extraction failure.
+                    print(f"CodeQL execution diagnostic: {identifier} ({level})")
+                    failures += 1
         for result in run.get("results", []):
             identifier = result.get("ruleId", result.get("rule", {}).get("id"))
             if identifier not in rules:

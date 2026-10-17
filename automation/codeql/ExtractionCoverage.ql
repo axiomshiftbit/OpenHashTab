@@ -10,4 +10,5 @@ where
 select f.getRelativePath() as path,
   count(Compilation c | c.getAFileCompiled() = f and c.normalTermination()) as completed,
   count(Compilation c | c.getAFileCompiled() = f and not c.normalTermination()) as crashed,
+  count(File parsed | parsed = f and parsed.fromSource()) as parsed,
   count(Function fn | fn.getFile() = f) as functions

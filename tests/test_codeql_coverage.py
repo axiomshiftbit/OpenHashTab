@@ -8,8 +8,8 @@ gate = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(gate)
 
 
-def row(path, completed=1, crashed=0, functions=1):
-    return dict(path=path, completed=completed, crashed=crashed, functions=functions)
+def row(path, completed=1, crashed=0, functions=1, parsed=1):
+    return dict(path=path, completed=completed, crashed=crashed, functions=functions, parsed=parsed)
 
 
 class ExtractionCoverage(unittest.TestCase):
@@ -27,6 +27,9 @@ class ExtractionCoverage(unittest.TestCase):
 
     def test_traced_but_not_extracted_source_fails(self):
         self.assertEqual(gate.check([row('a.cpp', completed=0), self.header], {'a.cpp'}), 1)
+
+    def test_normal_exit_without_source_entities_fails(self):
+        self.assertEqual(gate.check([row('a.cpp', parsed=0), self.header], {'a.cpp'}), 1)
 
     def test_dependency_crash_fails(self):
         self.assertEqual(gate.check([row('a.cpp'), row('vendor/b.c', crashed=1), self.header], {'a.cpp'}), 1)
