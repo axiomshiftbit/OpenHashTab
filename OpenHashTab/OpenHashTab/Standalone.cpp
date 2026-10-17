@@ -28,8 +28,13 @@ extern "C" __declspec(dllexport) int APIENTRY StandaloneEntryW(
   UNREFERENCED_PARAMETER(hWnd);
   UNREFERENCED_PARAMETER(hRunDLLInstance);
 
+  if (!lpCmdLine || !*lpCmdLine)
+    return 0;
+
   auto argc = 0;
   const auto argv = CommandLineToArgvW(lpCmdLine, &argc);
+  if (!argv)
+    return static_cast<int>(GetLastError());
   const std::list<std::wstring> files{argv, argv + argc};
   LocalFree(argv);
 
@@ -53,12 +58,18 @@ extern "C" __declspec(dllexport) int APIENTRY StandaloneEntryW(
     &wnd::DlgProcClassBinder<MainDialog>,
     reinterpret_cast<LPARAM>(coordinator)
   );
+  if (!dialog) {
+    const auto error = GetLastError();
+    delete coordinator;
+    return static_cast<int>(error ? error : ERROR_INVALID_WINDOW_HANDLE);
+  }
   ShowWindow(dialog, nShowCmd);
 
-  MSG msg;
+  MSG msg{};
 
   // Main message loop:
-  while (GetMessageW(&msg, nullptr, 0, 0)) {
+  BOOL result;
+  while ((result = GetMessageW(&msg, nullptr, 0, 0)) > 0) {
     if (!IsDialogMessageW(dialog, &msg)) {
       TranslateMessage(&msg);
       DispatchMessageW(&msg);
@@ -70,5 +81,5 @@ extern "C" __declspec(dllexport) int APIENTRY StandaloneEntryW(
   // and let the OS do the cleanup?
   delete coordinator;
 
-  return (int)msg.wParam;
+  return result == -1 ? static_cast<int>(GetLastError()) : static_cast<int>(msg.wParam);
 }

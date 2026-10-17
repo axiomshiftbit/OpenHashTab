@@ -21,7 +21,7 @@
 
 static auto k_regex_hex = ctre::match<R"(([0-9a-fA-F]{8,512}) [ \*](.++))">;
 static auto k_regex_b64 = ctre::match<R"(([0-9a-zA-Z=+\/,\-_]{6,512}) [ \*](.++))">;
-static auto k_regex_sfv = ctre::match<R"(([^ ]++)\s++([0-9a-fA-F]{8}))">;
+static auto k_regex_sfv = ctre::match<R"((.+) +([0-9a-fA-F]{8}))">;
 
 class SumFileParser2 {
   enum class CommentStyle {
@@ -41,6 +41,8 @@ public:
   FileSumList files{};
 
   bool ProcessLine(std::string_view sv) {
+    if (sv.find('\0') != std::string_view::npos)
+      return false;
     if (sv.find_first_not_of("\r\n\t\f\v ") == std::string_view::npos)
       return true; // empty line
 
@@ -73,7 +75,7 @@ public:
       if (auto [whole, hash_str, file] = k_regex_hex(sv); whole) {
         _hash = HashStyle::Hex;
         auto hash = utl::HashStringToBytes(std::string_view{hash_str});
-        if (!hash.empty()) {
+        if (!hash.empty() && hash.size() <= LegacyHashAlgorithm::k_max_size) {
           files.emplace_back(file, std::move(hash));
           return true;
         }
@@ -85,7 +87,7 @@ public:
         _hash = HashStyle::Base64;
         const auto hash_str = std::string(hash_match);
         auto hash = b64::decode(hash_str.c_str(), hash_str.size());
-        if (!hash.empty()) {
+        if (!hash.empty() && hash.size() <= LegacyHashAlgorithm::k_max_size) {
           files.emplace_back(file, std::move(hash));
           return true;
         }
@@ -154,6 +156,8 @@ DWORD TryParseSumFile(HANDLE h, FileSumList& output) {
       auto hash = utl::HashStringToBytes(nwsv);
       if (!hash.empty()) {
         output.emplace_back(std::string{}, std::move(hash));
+        UnmapViewOfFile(address);
+        CloseHandle(mapping);
         return ERROR_SUCCESS;
       }
     }

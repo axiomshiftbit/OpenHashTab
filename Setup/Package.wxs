@@ -1,7 +1,7 @@
 <?define ProductName = "OpenHashTab"?>
 <!--<?define ProductVersion = "3.1.1"?>-->
-<?define ProductAuthor = "namazso"?>
-<?define ProductHelpLink = "https://github.com/namazso/OpenHashTab"?>
+<?define ProductAuthor = "axiomshiftbit"?>
+<?define ProductHelpLink = "https://github.com/axiomshiftbit/OpenHashTab"?>
 <!--<?define BuildDirectory32 = "cmake-openhashtab-x86"?>-->
 <!--<?define AlgorithmsDllsDirectory = "AlgorithmsDlls"?>-->
 <?define CLSID = "{23B5BDD4-7669-42B8-9CDC-BEEBC8A5BAA9}"?>
@@ -45,6 +45,9 @@
         Version="$(var.ProductVersion)"
         Scope="$(var.InstallerScope)"
         UpgradeCode="$(var.ProductUpgradeCode)">
+
+        <MajorUpgrade DowngradeErrorMessage="A newer version of OpenHashTab is already installed."
+                      Schedule="afterInstallInitialize" />
 
         <Property Id='ARPHELPLINK' Value='$(var.ProductHelpLink)' />
         <?if $(var.Win64) = "yes"?>

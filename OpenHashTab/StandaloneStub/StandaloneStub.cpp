@@ -31,5 +31,7 @@ int APIENTRY wWinMain(
   _In_ int nCmdShow
 ) {
   UNREFERENCED_PARAMETER(hPrevInstance);
+  if (!lpCmdLine || !*lpCmdLine)
+    return 0;
   return StandaloneEntryW(nullptr, hInstance, lpCmdLine, nCmdShow);
 }

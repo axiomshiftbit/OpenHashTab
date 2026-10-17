@@ -60,6 +60,8 @@ ProcessedFileList ProcessEverything(std::list<std::wstring> list, const Settings
   ProcessedFileList pfl;
 
   pfl.sumfile_type = -2;
+  if (list.empty())
+    return pfl;
   std::list<std::pair<std::wstring, std::vector<uint8_t>>> fsl_absolute;
 
   if (list.size() == 1) {

@@ -1,0 +1,21 @@
+# SPDX-License-Identifier: GPL-3.0-or-later
+set(APP "${CMAKE_CURRENT_SOURCE_DIR}/../OpenHashTab")
+add_executable(CoreTests ../../tests/CoreTests.cpp
+    ${APP}/base64.cpp ${APP}/utl.cpp ${APP}/SumFileParser.cpp ${APP}/path.cpp
+    ${APP}/Settings.cpp ${APP}/Coordinator.cpp ${APP}/FileHashTask.cpp
+    ${APP}/Queues.cpp ${APP}/Exporter.cpp)
+target_include_directories(CoreTests PRIVATE ${APP})
+target_precompile_headers(CoreTests PRIVATE ${APP}/stdafx.h)
+target_compile_definitions(CoreTests PRIVATE UNICODE _UNICODE "CI_VERSION=\"${CI_VERSION}\"")
+target_compile_options(CoreTests PRIVATE /EHsc)
+target_link_libraries(CoreTests PRIVATE LegacyAlgorithms ctre concurrentqueue
+    ntdll winhttp comctl32 shlwapi comdlg32 shell32 ole32 uuid)
+add_executable(EncodingTests ../../tests/EncodingTests.cpp ${APP}/base64.cpp)
+target_include_directories(EncodingTests PRIVATE ${APP})
+target_compile_options(EncodingTests PRIVATE /EHsc)
+add_test(NAME core COMMAND CoreTests)
+add_test(NAME encoding COMMAND EncodingTests)
+set_tests_properties(core encoding PROPERTIES TIMEOUT 180)
+add_custom_command(TARGET CoreTests POST_BUILD
+    COMMAND ${CMAKE_COMMAND} -E copy $<TARGET_RUNTIME_DLLS:CoreTests> $<TARGET_FILE_DIR:CoreTests>
+    COMMAND_EXPAND_LISTS)

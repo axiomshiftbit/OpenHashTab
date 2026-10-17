@@ -16,6 +16,14 @@
 
 [CmdletBinding()] param ()
 
+$ErrorActionPreference = 'Stop'
+# PowerShell 7.3+ propagates failures from cmake, dotnet and signing commands.
+if ($PSVersionTable.PSVersion -lt [version]'7.3') {
+    throw 'Build with PowerShell 7.3 or newer.'
+}
+$PSNativeCommandUseErrorActionPreference = $true
+
+
 function Get-Environment {
     <#
     .SYNOPSIS
@@ -158,8 +166,9 @@ function Get-CmdEnvironment {
 }
 
 $OriginalEnvironment = Get-Environment;
+try {
 
-$VSRoot = If ($Env:VSINSTALLDIR) {$Env:VSINSTALLDIR} Else { & vswhere -property installationPath };
+$VSRoot = If ($Env:VSINSTALLDIR) {$Env:VSINSTALLDIR} Else { & vswhere -latest -products * -requires Microsoft.VisualStudio.Component.VC.Tools.x86.x64 -property installationPath };
 
 If (-not $VSRoot) {
     Throw "Visual Studio not found."
@@ -173,16 +182,15 @@ $Dotnet = Get-Command "dotnet";
 $Ninja = (Get-Command "ninja").Path;
 $LlvmPath = (Get-Item (Get-Command "clang").Path).Directory.FullName;
 
-If (Test-Path "Env:CI_VERSION") {
-    $OhtVersion = $Env:CI_VERSION;
-    $OhtVersionMajor = $Env:CI_VERSION_MAJOR;
-    $OhtVersionMinor = $Env:CI_VERSION_MINOR;
-    $OhtVersionPatch = $Env:CI_VERSION_PATCH;
-} Else {
-    $OhtVersion = "(unknown)";
-    $OhtVersionMajor = 0;
-    $OhtVersionMinor = 0;
-    $OhtVersionPatch = 0;
+$OhtVersion = (Get-Content "$PSScriptRoot/VERSION" -Raw).Trim()
+if ($OhtVersion -notmatch '^(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)$') {
+    throw 'VERSION must contain a numeric major.minor.patch version.'
+}
+$OhtVersionMajor = [int]$Matches[1]
+$OhtVersionMinor = [int]$Matches[2]
+$OhtVersionPatch = [int]$Matches[3]
+if ($OhtVersionMajor -gt 255 -or $OhtVersionMinor -gt 255 -or $OhtVersionPatch -gt 65535) {
+    throw 'VERSION exceeds Windows Installer version limits.'
 }
 
 $CleanEnv = Reset-Environment $OriginalEnvironment -AdditionalVariables @("AUTHENTICODE_SIGN");
@@ -192,8 +200,8 @@ Write-Host "Using Visual Studio at: $VSRoot"
 
 $x86_Environment = Get-CmdEnvironment -ScriptPath "$VSRoot\VC\Auxiliary\Build\vcvarsamd64_x86.bat";
 $x86_Environment["CFLAGS"] = "--target=i686-pc-windows-msvc";
-$x86_Environment["CXXFLAGS"] = "--target=i686-pc-windows-msv";
-$x86_Environment["LDFLAGS"] = "--target=i686-pc-windows-msv";
+$x86_Environment["CXXFLAGS"] = "--target=i686-pc-windows-msvc";
+$x86_Environment["LDFLAGS"] = "--target=i686-pc-windows-msvc";
 $x64_Environment = Get-CmdEnvironment -ScriptPath "$VSRoot\VC\Auxiliary\Build\vcvars64.bat";
 $x64_Environment["CFLAGS"] = "--target=x86_64-pc-windows-msvc";
 $x64_Environment["CXXFLAGS"] = "--target=x86_64-pc-windows-msvc";
@@ -214,7 +222,7 @@ foreach ($env in @($x86_Environment, $x64_Environment, $ARM64_Environment)) {
     $env["Path"] += ";$WinSdkDir\bin\$WinSdkVer\x64";
 }
 
-Write-Host "bleh"
+Write-Host "Building OpenHashTab $OhtVersion"
 
 New-Item -Path "install" -ItemType Directory -Force
 New-Item -Path "install\algorithms" -ItemType Directory -Force
@@ -280,7 +288,8 @@ $OhtVersionNumeric = "$OhtVersionMajor.$OhtVersionMinor.$OhtVersionPatch";
         "-DCI_VERSION=$OhtVersion" `
         "-DCI_VERSION_MAJOR=$OhtVersionMajor" `
         "-DCI_VERSION_MINOR=$OhtVersionMinor" `
-        "-DCI_VERSION_PATCH=$OhtVersionPatch"
+        "-DCI_VERSION_PATCH=$OhtVersionPatch" `
+        "-DBUILD_TESTING=ON"
     & $Cmake --build $BuildDir
 
     If ($Env:AUTHENTICODE_SIGN) {
@@ -289,6 +298,10 @@ $OhtVersionNumeric = "$OhtVersionMajor.$OhtVersionMinor.$OhtVersionPatch";
         & $Env:AUTHENTICODE_SIGN "$((Get-Item "$BuildDir\Benchmark.exe").FullName)"
     }
     
+    if ($_ -ne "arm64") {
+        & "$((Get-Item $BuildDir).FullName)\Tests\CoreTests.exe"
+        & "$((Get-Item $BuildDir).FullName)\Tests\EncodingTests.exe"
+    }
     $BuildDir32 = "build\oht-x86";
 
     "User", "Machine" | ForEach-Object {
@@ -301,4 +314,6 @@ $OhtVersionNumeric = "$OhtVersionMajor.$OhtVersionMinor.$OhtVersionPatch";
     }
 }
 
-Set-Environment -Environment $OriginalEnvironment;
+} finally {
+    Set-Environment -Environment $OriginalEnvironment
+}

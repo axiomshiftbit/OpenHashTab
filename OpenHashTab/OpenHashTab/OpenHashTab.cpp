@@ -128,6 +128,9 @@ HRESULT STDMETHODCALLTYPE COpenHashTabShlExt::Initialize(
 ) {
   UNREFERENCED_PARAMETER(folder);
   UNREFERENCED_PARAMETER(prog_id);
+  _files_raw.clear();
+  if (!data)
+    return E_INVALIDARG;
 
   // Init the common controls.
   INITCOMMONCONTROLSEX iccex{

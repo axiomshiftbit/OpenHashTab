@@ -14,6 +14,7 @@
 //    You should have received a copy of the GNU General Public License
 //    along with OpenHashTab.  If not, see <https://www.gnu.org/licenses/>.
 #include "base64.h"
+#include <stdexcept>
 
 // clang-format off
 static const char encode_table[64]{
@@ -25,6 +26,9 @@ static const char encode_table[64]{
 // clang-format on
 
 std::string b64::encode(const uint8_t* src, size_t len) {
+  if (len == 0) return {};
+  if (len > (std::string{}.max_size() / 4) * 3)
+    throw std::length_error("Base64 input is too large");
   const auto olen = 4 * ((len + 2) / 3);
 
   std::string str;
@@ -57,36 +61,40 @@ std::string b64::encode(const uint8_t* src, size_t len) {
   return str;
 }
 
-// clang-format off
-static const uint32_t decode_table[256] = {
-  0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-  0, 0, 0, 0, 62, 63, 62, 62, 63, 52, 53, 54, 55, 56, 57, 58, 59, 60, 61, 0, 0, 0, 0, 0, 0, 0, 0, 1, 2, 3, 4, 5, 6, 7,
-  8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 0, 0, 0, 0, 63, 0, 26, 27, 28, 29, 30, 31, 32,
-  33, 34, 35, 36, 37, 38, 39, 40, 41, 42, 43, 44, 45, 46, 47, 48, 49, 50, 51
-};
-
-// clang-format on
+// Accept standard, URL-safe and the historical comma alphabet.
+static int decode_digit(unsigned char c) {
+  if (c >= 'A' && c <= 'Z') return c - 'A';
+  if (c >= 'a' && c <= 'z') return c - 'a' + 26;
+  if (c >= '0' && c <= '9') return c - '0' + 52;
+  if (c == '+' || c == '-') return 62;
+  if (c == '/' || c == '_' || c == ',') return 63;
+  return -1;
+}
 
 std::vector<uint8_t> b64::decode(const char* str, const size_t len) {
-  const auto p = reinterpret_cast<const uint8_t*>(str);
-  const auto pad = len > 0 && (len % 4 || p[len - 1] == '=');
-  const auto L = ((len + 3) / 4 - pad) * 4;
-  std::vector<uint8_t> vec(L / 4 * 3 + pad, 0);
+  if (len == 0) return {};
+  size_t digits = len;
+  while (digits && str[digits - 1] == '=') --digits;
+  const auto padding = len - digits;
+  const auto remainder = digits % 4;
+  if (digits == 0 || remainder == 1 || padding > 2 ||
+      (padding && (len % 4 != 0 || padding != 4 - remainder)))
+    return {};
 
-  for (size_t i = 0, j = 0; i < L; i += 4) {
-    const auto n = decode_table[p[i]] << 18 | decode_table[p[i + 1]] << 12 | decode_table[p[i + 2]] << 6 | decode_table[p[i + 3]];
-    vec[j++] = n >> 16 & 0xFF;
-    vec[j++] = n >> 8 & 0xFF;
-    vec[j++] = n & 0xFF;
-  }
-  if (pad) {
-    auto n = decode_table[p[L]] << 18 | decode_table[p[L + 1]] << 12;
-    vec[vec.size() - 1] = n >> 16 & 0xFF;
-
-    if (len > L + 2 && p[L + 2] != '=') {
-      n |= decode_table[p[L + 2]] << 6;
-      vec.push_back(n >> 8 & 0xFF);
+  std::vector<uint8_t> out;
+  out.reserve(digits / 4 * 3 + remainder * 3 / 4);
+  uint32_t bits = 0;
+  unsigned count = 0;
+  for (size_t i = 0; i < digits; ++i) {
+    const auto digit = decode_digit(static_cast<unsigned char>(str[i]));
+    if (digit < 0) return {};
+    bits = (bits << 6) | static_cast<uint32_t>(digit);
+    count += 6;
+    if (count >= 8) {
+      count -= 8;
+      out.push_back(static_cast<uint8_t>(bits >> count));
     }
   }
-  return vec;
+  if ((bits & ((1u << count) - 1u)) != 0) return {};
+  return out;
 }

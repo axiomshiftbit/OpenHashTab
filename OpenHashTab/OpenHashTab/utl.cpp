@@ -189,12 +189,17 @@ bool utl::AreFilesTheSame(HANDLE a, HANDLE b) {
 }
 
 std::wstring utl::MakePathLongCompatible(std::wstring file) {
-  static constexpr wchar_t prefix[] = L"\\\\";
-  static constexpr auto prefixlen = std::size(prefix) - 1;
-  const auto file_cstr = file.c_str();
-  if (file.size() < prefixlen || 0 != wcsncmp(file_cstr, prefix, prefixlen))
-    file.insert(0, L"\\\\?\\");
-  return file;
+  if (file.empty() || file.rfind(L"\\\\?\\", 0) == 0 || file.rfind(L"\\\\.\\", 0) == 0)
+    return file;
+  const auto length = GetFullPathNameW(file.c_str(), 0, nullptr, nullptr);
+  if (!length) return file;
+  std::wstring absolute(length, L'\0');
+  const auto written = GetFullPathNameW(file.c_str(), length, absolute.data(), nullptr);
+  if (!written || written >= length) return file;
+  absolute.resize(written);
+  if (absolute.rfind(L"\\\\", 0) == 0)
+    return L"\\\\?\\UNC\\" + absolute.substr(2);
+  return L"\\\\?\\" + absolute;
 }
 
 HANDLE utl::OpenForRead(const std::wstring& file, bool async) {
@@ -210,34 +215,26 @@ HANDLE utl::OpenForRead(const std::wstring& file, bool async) {
 }
 
 DWORD utl::SetClipboardText(HWND hwnd, std::wstring_view text) {
-  DWORD error;
-
-  if (OpenClipboard(hwnd)) {
-    EmptyClipboard();
-
-    const auto len = text.length();
-
-    if (const auto cb = GlobalAlloc(GMEM_MOVEABLE, (len + 1) * sizeof(wchar_t))) {
-      // Lock the handle and copy the text to the buffer.
-      if (const auto lcb = static_cast<LPWSTR>(GlobalLock(cb))) {
-        memcpy(lcb, text.data(), (len + 1) * sizeof(wchar_t));
-        lcb[len] = 0;
-        const auto ref = GlobalUnlock(cb);
-        error = GetLastError();
-        if (ref != 0 || error == ERROR_SUCCESS) {
-          // Place the handle on the clipboard.
-          if (SetClipboardData(CF_UNICODETEXT, cb) == nullptr)
-            error = GetLastError();
-        }
-      } else
-        error = GetLastError();
-    } else
-      error = GetLastError();
-
-    CloseClipboard();
-  } else
+  if (!OpenClipboard(hwnd)) return GetLastError();
+  DWORD error = ERROR_SUCCESS;
+  if (!EmptyClipboard()) {
     error = GetLastError();
-
+  } else if (const auto cb = GlobalAlloc(GMEM_MOVEABLE, (text.size() + 1) * sizeof(wchar_t))) {
+    bool transferred = false;
+    if (const auto buffer = static_cast<LPWSTR>(GlobalLock(cb))) {
+      if (!text.empty()) memcpy(buffer, text.data(), text.size() * sizeof(wchar_t));
+      buffer[text.size()] = 0;
+      GlobalUnlock(cb);
+      transferred = SetClipboardData(CF_UNICODETEXT, cb) != nullptr;
+      if (!transferred) error = GetLastError();
+    } else {
+      error = GetLastError();
+    }
+    if (!transferred) GlobalFree(cb);
+  } else {
+    error = GetLastError();
+  }
+  CloseClipboard();
   return error;
 }
 
@@ -319,20 +316,21 @@ DWORD utl::SaveMemoryAsFile(const wchar_t* path, const void* p, DWORD size) {
 std::wstring utl::UTF8ToWide(const char* p) {
   const auto wsize = MultiByteToWideChar(
     CP_UTF8,
-    0,
+    MB_ERR_INVALID_CHARS,
     p,
     -1,
     nullptr,
     0
   );
 
+  if (wsize == 0) return {};
   std::wstring wstr;
   // size includes null
   wstr.resize((size_t)wsize - 1);
 
   MultiByteToWideChar(
     CP_UTF8,
-    0,
+    MB_ERR_INVALID_CHARS,
     p,
     -1,
     wstr.data(),
@@ -354,6 +352,7 @@ std::string utl::WideToUTF8(const wchar_t* p) {
     nullptr
   );
 
+  if (size == 0) return {};
   std::string str;
   // size includes null
   str.resize((size_t)size - 1);

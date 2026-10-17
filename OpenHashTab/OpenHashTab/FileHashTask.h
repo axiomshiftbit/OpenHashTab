@@ -83,7 +83,7 @@ class FileHashTask {
   std::atomic<unsigned> _hash_finish_counter{0};
 
   int _match_state{};
-  bool _cancelled{};
+  std::atomic<bool> _cancelled{};
 
   uint8_t _lparam_idx[LegacyHashAlgorithm::k_count]{};
 

@@ -26,7 +26,7 @@ Coordinator::Coordinator(std::list<std::wstring> files)
 Coordinator::~Coordinator() {
   Cancel();
   while (_references != 0)
-    ;
+    Sleep(1);
 }
 
 void Coordinator::RegisterWindow(HWND window) {
@@ -86,8 +86,10 @@ void Coordinator::ProcessFiles() {
     SendNotifyMessageW(_window, wnd::WM_USER_ALL_FILES_FINISHED, wnd::k_user_magic_wparam, 0);
     return;
   }
+  // Publish the total before starting tasks: an empty or unreadable file can
+  // finish before the next task has even been submitted.
+  _files_not_finished = static_cast<unsigned>(_file_tasks.size());
   for (const auto& task : _file_tasks) {
-    ++_files_not_finished;
     task->StartProcessing();
   }
 }
@@ -97,8 +99,12 @@ void Coordinator::Cancel(bool wait) {
     file->SetCancelled();
 
   if (wait)
-    while (_files_not_finished > 0)
-      Sleep(1);
+    WaitForCompletion();
+}
+
+void Coordinator::WaitForCompletion() const {
+  while (_files_not_finished > 0)
+    Sleep(1);
 }
 
 void Coordinator::FileCompletionCallback(FileHashTask* file) {

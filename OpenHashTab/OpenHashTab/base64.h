@@ -14,6 +14,9 @@
 //    You should have received a copy of the GNU General Public License
 //    along with OpenHashTab.  If not, see <https://www.gnu.org/licenses/>.
 #pragma once
+#include <cstdint>
+#include <string>
+#include <vector>
 
 namespace b64 {
   std::string encode(const uint8_t* src, size_t len);

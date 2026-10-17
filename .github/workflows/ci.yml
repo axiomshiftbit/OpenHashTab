@@ -1,76 +1,90 @@
-name: release
+name: Build and test
 
 on:
   push:
-    tags:
-      - "*.*.*"
-    branches:
-      - "*"
+    branches: ['**']
+    tags: ['v*.*.*']
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
 
 jobs:
-  build:
-    name: build-windows
-    runs-on: windows-2025
-
+  encoding:
+    name: Encoding sanitizers
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
     steps:
-      - name: Checkout
-        uses: actions/checkout@v4
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: AddressSanitizer and UndefinedBehaviorSanitizer
+        run: |
+          g++ -std=c++20 -g -fsanitize=address,undefined -I OpenHashTab/OpenHashTab tests/EncodingTests.cpp OpenHashTab/OpenHashTab/base64.cpp -o "$RUNNER_TEMP/encoding-tests"
+          "$RUNNER_TEMP/encoding-tests"
+
+  build:
+    name: Build x86, x64 and ARM64
+    runs-on: windows-2025
+    timeout-minutes: 35
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           submodules: recursive
-          fetch-depth: 0
-
-      - name: Install 26100 SDK and WDK
+          persist-credentials: false
+      - name: Check release version
+        shell: pwsh
         run: |
-          winget install --source winget --exact --id Microsoft.WindowsSDK.10.0.26100 --disable-interactivity --accept-source-agreements
-          winget install --source winget --exact --id Microsoft.WindowsWDK.10.0.26100 --disable-interactivity --accept-source-agreements
-          echo "WindowsTargetPlatformVersion=10.0.26100.0" >> $Env:GITHUB_ENV
-
-      - name: Figure out if we're running for a tag
-        id: checktag
-        run: |
-          cd ${{ github.workspace }}
-          If($Env:GITHUB_REF -match "([0-9]+)\.([0-9]+)\.([0-9]+)") {
-              $IsRelease = "yes";
-              $Version = $Matches[0];
-              $VersionMajor = $Matches[1];
-              $VersionMinor = $Matches[2];
-              $VersionPatch = $Matches[3];
-          } Else {
-              $IsRelease = "no";
-              $Version = (git describe --dirty --broken --always);
-              If($Version -match "([0-9]*)\.([0-9]*)\.([0-9]*)-.*") {
-                  $VersionMajor = $Matches[1];
-                  $VersionMinor = $Matches[2];
-                  $VersionPatch = $Matches[3];
-              } Else {
-                  $VersionMajor = 0;
-                  $VersionMinor = 0;
-                  $VersionPatch = 0;
-              }
+          $version = (Get-Content VERSION -Raw).Trim()
+          if ($env:GITHUB_REF_TYPE -eq 'tag' -and $env:GITHUB_REF_NAME -ne "v$version") {
+            throw 'The release tag must match VERSION.'
           }
-          Echo ("is_release=" + $IsRelease) >> $Env:GITHUB_OUTPUT;
-          Echo ("version=" + $Version) >> $Env:GITHUB_OUTPUT;
-          Echo ("version_major=" + $VersionMajor) >> $Env:GITHUB_OUTPUT;
-          Echo ("version_minor=" + $VersionMinor) >> $Env:GITHUB_OUTPUT;
-          Echo ("version_patch=" + $VersionPatch) >> $Env:GITHUB_OUTPUT;
-
-      - name: Build all
+      - name: Install SDK and WDK
+        shell: pwsh
         run: |
-          cd ${{ github.workspace }}
-          .\build_all.ps1
-
-      - name: Upload installers
-        uses: actions/upload-artifact@v4
+          $ErrorActionPreference = 'Stop'
+          foreach ($id in @('Microsoft.WindowsSDK.10.0.26100', 'Microsoft.WindowsWDK.10.0.26100')) {
+            winget install --source winget --exact --id $id --disable-interactivity --accept-source-agreements --accept-package-agreements
+            if ($LASTEXITCODE -ne 0 -and $LASTEXITCODE -ne -1978335189) { throw "winget failed: $id ($LASTEXITCODE)" }
+          }
+          'WindowsTargetPlatformVersion=10.0.26100.0' >> $env:GITHUB_ENV
+      - name: Build and run native x86/x64 tests
+        shell: pwsh
+        run: ./build_all.ps1
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
-          name: installers
-          path: |
-            .\install\*.msi
-
-      - name: Upload unpacked
-        uses: actions/upload-artifact@v4
+          name: installers-candidate
+          path: install/*.msi
+          if-no-files-found: error
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
-          name: unpacked
+          name: binaries-and-tests
           path: |
-            .\build\oht-*\*.dll
-            .\build\oht-*\*.exe
-            .\build\oht-*\*.pdb
+            build/oht-*/*.dll
+            build/oht-*/*.exe
+            build/oht-*/*.pdb
+            build/oht-*/Tests/*.exe
+            build/oht-*/Tests/*.dll
+          if-no-files-found: error
+
+  arm64:
+    name: Native Windows 11 ARM64 tests
+    needs: build
+    runs-on: windows-11-arm
+    timeout-minutes: 15
+    steps:
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: binaries-and-tests
+          path: binaries
+      - name: Verify OS and run tests
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $PSNativeCommandUseErrorActionPreference = $true
+          $os = Get-CimInstance Win32_OperatingSystem
+          $os | Select-Object Caption, Version, BuildNumber, OSArchitecture | Format-List
+          if ($os.Caption -notmatch 'Windows 11' -or [int]$os.BuildNumber -lt 22000) { throw 'A Windows 11 client is required.' }
+          & ./binaries/oht-arm64/Tests/CoreTests.exe
+          & ./binaries/oht-arm64/Tests/EncodingTests.exe

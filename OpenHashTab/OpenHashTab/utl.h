@@ -14,6 +14,7 @@
 //    You should have received a copy of the GNU General Public License
 //    along with OpenHashTab.  If not, see <https://www.gnu.org/licenses/>.
 #pragma once
+#include <Hasher.h>
 
 #ifdef _DEBUG
 inline void DebugMsg(PCSTR fmt, ...) {
@@ -76,17 +77,19 @@ namespace utl {
   std::vector<uint8_t> HashStringToBytes(std::basic_string_view<Char> str) {
     std::vector<uint8_t> res;
 
-    for (size_t i = 0u; i < str.size() - 1; i += 2) {
-      while (str[i] == ' ') {
-        i++;
-        if (i >= str.size() - 1)
-          break;
-      }
+    for (size_t i = 0; i < str.size();) {
+      while (i < str.size() && str[i] == ' ')
+        ++i;
+      if (i == str.size())
+        break;
+      if (str.size() - i < 2 || res.size() == LegacyHashAlgorithm::k_max_size)
+        return {};
       const auto a = utl::unhex<Char>(str[i]);
       const auto b = utl::unhex<Char>(str[i + 1]);
       if (a == 0xFF || b == 0xFF)
         return {}; // invalid
       res.push_back((uint8_t)((unsigned)a << 4 | b));
+      i += 2;
     }
     return res;
   }

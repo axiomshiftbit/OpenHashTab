@@ -81,3 +81,8 @@ add_subdirectory(Benchmark)
 add_subdirectory(OpenHashTab)
 
 add_subdirectory(StandaloneStub)
+
+include(CTest)
+if(BUILD_TESTING)
+    add_subdirectory(Tests)
+endif()

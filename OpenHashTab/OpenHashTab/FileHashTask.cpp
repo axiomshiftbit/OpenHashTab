@@ -210,7 +210,7 @@ bool FileHashTask::ReadBlockAsync(uint8_t* reuse_block) {
 
     // If we got some unknown error don't reschedule, fail instead
     if (error != ERROR_INVALID_USER_BUFFER && error != ERROR_NOT_ENOUGH_MEMORY) {
-      assert(_error);
+      assert(error);
       _error = error;
       Finish();
       return true;
@@ -223,7 +223,10 @@ bool FileHashTask::ReadBlockAsync(uint8_t* reuse_block) {
 }
 
 void FileHashTask::OverlappedCompletionRoutine(ULONG error_code, ULONG_PTR bytes_transferred) {
-  UNREFERENCED_PARAMETER(bytes_transferred);
+  // A concurrent truncation can complete a read successfully with fewer bytes.
+  // Never hash the unfilled part of the buffer as if it came from the file.
+  if (error_code == ERROR_SUCCESS && bytes_transferred != GetCurrentBlockSize())
+    error_code = ERROR_HANDLE_EOF;
 
   uint8_t* reuse_block = nullptr;
 

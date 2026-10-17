@@ -50,6 +50,7 @@ public:
   void AddFiles();
   void ProcessFiles();
   void Cancel(bool wait = true);
+  void WaitForCompletion() const;
   void FileCompletionCallback(FileHashTask* file);
   void FileProgressCallback(uint64_t size_progress);
 

@@ -2,13 +2,21 @@
 
 [![License](https://img.shields.io/github/license/namazso/OpenHashTab)](COPYING) [![Weblate translation status](https://hosted.weblate.org/widgets/openhashtab/-/main/svg-badge.svg)](https://hosted.weblate.org/projects/openhashtab/main/) [![Downloads](https://img.shields.io/github/downloads/namazso/OpenHashTab/total)](https://github.com/namazso/OpenHashTab/releases/latest) [![GitHub Version](https://img.shields.io/github/v/release/namazso/OpenHashTab)](https://github.com/namazso/OpenHashTab/releases/latest) [![Chocolatey Version](https://img.shields.io/chocolatey/v/openhashtab)](https://chocolatey.org/packages/openhashtab/) ![Commits since release](https://img.shields.io/github/commits-since/namazso/OpenHashTab/latest/master)
 
+## Авторство и происхождение проекта
+
+Эта версия OpenHashTab основана на проекте **[OpenHashTab](https://github.com/namazso/OpenHashTab)**, созданном **[namazso](https://github.com/namazso)**. Оригинальный автор и участники исходного проекта сохраняют авторство своего кода.
+
+Репозиторий **[axiomshiftbit/OpenHashTab](https://github.com/axiomshiftbit/OpenHashTab)** поддерживается независимо. Исходная ветка `master` перенесена из **[MarkDDi/OpenHashTab](https://github.com/MarkDDi/OpenHashTab)** с сохранением истории изменений. Доработки в этом репозитории не означают участия или одобрения со стороны оригинального автора.
+
+Проект распространяется на условиях **GNU GPL версии 3 или более поздней**; см. [COPYING](COPYING). Существующие уведомления об авторских правах и лицензии сторонних компонентов сохранены.
+
 ## About
 
 OpenHashTab is a shell extension for conveniently calculating and checking file hashes from file properties.
 
 ## Features
 
-* Support for 28 algorithms, see **Algorithms**
+* Support for 31 algorithms, see **Algorithms**
 * High performance hash calculation
 * Native Windows looks
 * High DPI screen support

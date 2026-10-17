@@ -136,6 +136,11 @@ public:
   HashBox& operator=(const HashBox&) = delete;
   HashBox& operator=(HashBox&& rhs) noexcept
   {
+    if (this == &rhs)
+      return *this;
+    if (_ctx)
+      _algorithm->_delete_fn(_ctx);
+    _aligned_free(_ctx);
     _algorithm = rhs._algorithm;
     _ctx = rhs._ctx;
     rhs._algorithm = nullptr;
