@@ -69,12 +69,48 @@ jobs:
             build/oht-*/Tests/*.dll
           if-no-files-found: error
 
+  baseline:
+    name: Build previous installer for upgrade tests
+    runs-on: windows-2025
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: 705a66c8cd85fdd818f4aff60c2b20a0ec3e1658
+          submodules: recursive
+          persist-credentials: false
+      - name: Install baseline SDK and WDK
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          foreach ($id in @('Microsoft.WindowsSDK.10.0.26100', 'Microsoft.WindowsWDK.10.0.26100')) {
+            winget install --source winget --exact --id $id --disable-interactivity --accept-source-agreements --accept-package-agreements
+            if ($LASTEXITCODE -ne 0 -and $LASTEXITCODE -ne -1978335189) { throw "winget failed: $id ($LASTEXITCODE)" }
+          }
+          'WindowsTargetPlatformVersion=10.0.26100.0' >> $env:GITHUB_ENV
+      - name: Build the pinned original source
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $PSNativeCommandUseErrorActionPreference = $true
+          ./build_all.ps1
+          if (@(Get-ChildItem install/*.msi).Count -ne 6) { throw 'The baseline must contain six installers.' }
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: previous-installers-test-only
+          path: install/*.msi
+          if-no-files-found: error
+          retention-days: 1
+
   arm64:
     name: Native Windows 11 ARM64 tests
-    needs: build
+    needs: [build, baseline]
     runs-on: windows-11-arm
-    timeout-minutes: 15
+    timeout-minutes: 20
     steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
       - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
         with:
           name: binaries-and-tests
@@ -90,6 +126,18 @@ jobs:
           & ./binaries/oht-arm64/Tests/CoreTests.exe
           & ./binaries/oht-arm64/Tests/EncodingTests.exe
 
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: installers-candidate
+          path: installers
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: previous-installers-test-only
+          path: baseline
+      - name: ARM64 installer lifecycle
+        shell: pwsh
+        run: ./automation/Test-Install.ps1 -Stage All -Architecture arm64
+
   windows11:
-    needs: build
+    needs: [build, baseline]
     uses: ./.github/workflows/windows11.yml

@@ -90,7 +90,7 @@ std::string SFVExporter::GetExportString(
     if (settings->sumfile_banner_date)
       ss << " at " << TimeISO8601();
     ss << line_end;
-    ss << "; https://github.com/namazso/OpenHashTab/" << line_end;
+    ss << "; https://github.com/axiomshiftbit/OpenHashTab/" << line_end;
     ss << ";" << line_end;
   }
 
@@ -133,7 +133,7 @@ static std::string GetExportStringSumfile(
     if (settings->sumfile_banner_date)
       ss << " at " << TimeISO8601();
     ss << line_end;
-    ss << "# https://github.com/namazso/OpenHashTab/" << line_end;
+    ss << "# https://github.com/axiomshiftbit/OpenHashTab/" << line_end;
     ss << "#" << line_end;
   }
 

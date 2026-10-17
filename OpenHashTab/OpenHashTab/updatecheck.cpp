@@ -23,7 +23,7 @@ utl::Version utl::GetLatestVersion() {
   r.user_agent = L"OpenHashTab_Update_Checker";
   r.server_name = L"api.github.com";
   r.method = L"GET";
-  r.uri = L"/repos/namazso/OpenHashTab/tags";
+  r.uri = L"/repos/axiomshiftbit/OpenHashTab/releases/latest";
   r.headers = L"Content-Type: application/json\r\nAccept: application/vnd.github.v3+json\r\n";
 
   const auto reply = DoHTTPS(r);
@@ -35,6 +35,9 @@ utl::Version utl::GetLatestVersion() {
       reply.error_location,
       ErrorToString(reply.error_code).c_str()
     ));
+
+  if (reply.http_code == 404)
+    return {CI_VERSION_MAJOR, CI_VERSION_MINOR, CI_VERSION_PATCH}; // No published release yet.
 
   if (reply.http_code != 200)
     throw std::runtime_error(FormatString(
@@ -53,10 +56,9 @@ utl::Version utl::GetLatestVersion() {
       reply.body.c_str()
     ));
 
-  const json_t* j_child;
   const json_t* j_name;
 
-  if (json_getType(j_root) != JSON_ARRAY || !((j_child = json_getChild(j_root))) || json_getType(j_child) != JSON_OBJ || !((j_name = json_getProperty(j_child, "name"))) || json_getType(j_name) != JSON_TEXT)
+  if (json_getType(j_root) != JSON_OBJ || !((j_name = json_getProperty(j_root, "tag_name"))) || json_getType(j_name) != JSON_TEXT)
     throw std::runtime_error(FormatString(
       "Malformed reply. Body: %s",
       reply.body.c_str()

@@ -140,7 +140,7 @@ BEGIN
 
   ICON            IDI_ICON1,IDC_ICON_1,MARGIN,270,21,20
   LTEXT           "OpenHashTab",IDC_PROJECT_NAME,30,270,144,12
-  CONTROL         "<a href=""https://github.com/namazso/OpenHashTab"">github.com/namazso/OpenHashTab</a>",IDC_PROJECT_LINK,"SysLink",WS_TABSTOP,30,281,144,12
+  CONTROL         "<a href=""https://github.com/axiomshiftbit/OpenHashTab"">OpenHashTab / axiomshiftbit</a>",IDC_PROJECT_LINK,"SysLink",WS_TABSTOP,30,281,144,12
   PUSHBUTTON      "",IDC_BUTTON_CHECK_FOR_UPDATES,MARGIN,294,168,14
 
 #define COLORS_X 180

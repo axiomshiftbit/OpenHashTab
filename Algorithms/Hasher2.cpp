@@ -842,7 +842,7 @@ constexpr HashAlgorithm k_algorithms[] = {
   make_algorithm<Md4HashContext>("MD4", false),
   make_algorithm<Md5HashContext>("MD5", false),
   make_algorithm<RipeMD160HashContext>("RipeMD160", true),
-  make_algorithm<Sha1HashContext>("SHA-1", true),
+  make_algorithm<Sha1HashContext>("SHA-1", false),
   make_algorithm<Sha224HashContext>("SHA-224", true),
   make_algorithm<Sha256HashContext>("SHA-256", true),
   make_algorithm<Sha384HashContext>("SHA-384", true),

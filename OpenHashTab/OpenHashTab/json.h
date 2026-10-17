@@ -55,3 +55,28 @@ public:
 
   [[nodiscard]] const json_t* root() const { return _root; }
 };
+
+// Escape JSON string contents without changing UTF-8 multibyte sequences.
+inline std::string json_escape(std::string_view input) {
+  constexpr char hex[] = "0123456789abcdef";
+  std::string out;
+  for (unsigned char c : input) {
+    if (c == '"' || c == '\\') {
+      out += '\\';
+      out += static_cast<char>(c);
+    } else if (c == '\n') {
+      out += "\\n";
+    } else if (c == '\r') {
+      out += "\\r";
+    } else if (c == '\t') {
+      out += "\\t";
+    } else if (c < 0x20) {
+      out += "\\u00";
+      out += hex[c >> 4];
+      out += hex[c & 15];
+    } else {
+      out += static_cast<char>(c);
+    }
+  }
+  return out;
+}

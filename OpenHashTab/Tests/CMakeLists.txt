@@ -8,7 +8,7 @@ target_include_directories(CoreTests PRIVATE ${APP})
 target_precompile_headers(CoreTests PRIVATE ${APP}/stdafx.h)
 target_compile_definitions(CoreTests PRIVATE UNICODE _UNICODE "CI_VERSION=\"${CI_VERSION}\"")
 target_compile_options(CoreTests PRIVATE /EHsc)
-target_link_libraries(CoreTests PRIVATE LegacyAlgorithms AlgorithmsDlls ctre concurrentqueue
+target_link_libraries(CoreTests PRIVATE LegacyAlgorithms AlgorithmsDlls ctre concurrentqueue tiny-json
     ntdll winhttp comctl32 shlwapi comdlg32 shell32 ole32 uuid)
 add_executable(EncodingTests ../../tests/EncodingTests.cpp ${APP}/base64.cpp)
 target_include_directories(EncodingTests PRIVATE ${APP})
@@ -22,3 +22,6 @@ add_custom_command(TARGET CoreTests POST_BUILD
 add_executable(ShellTests ../../tests/ShellTests.cpp)
 target_compile_definitions(ShellTests PRIVATE UNICODE _UNICODE)
 target_link_libraries(ShellTests PRIVATE ole32 shell32 comctl32 uuid)
+
+set_target_properties(CoreTests EncodingTests ShellTests PROPERTIES
+    RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/Tests")

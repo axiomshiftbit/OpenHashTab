@@ -1,6 +1,6 @@
 # OpenHashTab
 
-[![License](https://img.shields.io/github/license/namazso/OpenHashTab)](COPYING) [![Weblate translation status](https://hosted.weblate.org/widgets/openhashtab/-/main/svg-badge.svg)](https://hosted.weblate.org/projects/openhashtab/main/) [![Downloads](https://img.shields.io/github/downloads/namazso/OpenHashTab/total)](https://github.com/namazso/OpenHashTab/releases/latest) [![GitHub Version](https://img.shields.io/github/v/release/namazso/OpenHashTab)](https://github.com/namazso/OpenHashTab/releases/latest) [![Chocolatey Version](https://img.shields.io/chocolatey/v/openhashtab)](https://chocolatey.org/packages/openhashtab/) ![Commits since release](https://img.shields.io/github/commits-since/namazso/OpenHashTab/latest/master)
+[![License](https://img.shields.io/github/license/axiomshiftbit/OpenHashTab)](COPYING) [![Build and test](https://github.com/axiomshiftbit/OpenHashTab/actions/workflows/ci.yml/badge.svg)](https://github.com/axiomshiftbit/OpenHashTab/actions/workflows/ci.yml)
 
 ## Авторство и происхождение проекта
 
@@ -76,11 +76,11 @@ Add a `DWORD` named `ForceDisableVT` to `HKEY_LOCAL_MACHINE\SOFTWARE\OpenHashTab
 
 ## Download
 
-[Latest release](https://github.com/namazso/OpenHashTab/releases/latest)
+[Releases of this independently maintained version](https://github.com/axiomshiftbit/OpenHashTab/releases)
 
-[Latest development build](https://nightly.link/namazso/OpenHashTab/workflows/ci/master/setup.zip)
+[Build candidates and test results](https://github.com/axiomshiftbit/OpenHashTab/actions/workflows/ci.yml)
 
-[Development builds](https://github.com/namazso/OpenHashTab/actions?query=branch%3Amaster)
+Build candidates are unsigned and are not a published stable release.
 
 ## Screenshot
 
@@ -121,3 +121,11 @@ All original code in this repo is licensed under the following license, unless e
     along with OpenHashTab.  If not, see <https://www.gnu.org/licenses/>.
 
 This software also contains or uses code from various other sources, for a complete list see [InstallerLicense.rtf](InstallerLicense.rtf)
+
+## Сборка и проверка
+
+Версия пакетов задаётся в файле `VERSION`. Сборка выполняется командой `pwsh ./build_all.ps1` на Windows с Visual Studio C++, Clang, CMake, Ninja, .NET SDK и Windows SDK/WDK 10.0.26100.0. Требуется PowerShell 7.3 или новее. Перед сборкой необходимо загрузить подмодули: `git submodule update --init --recursive`.
+
+GitHub Actions собирает варианты x86, x64 и ARM64, запускает тесты алгоритмов и обработки файлов. Для проверки установщика предусмотрены отдельные виртуальные машины Windows 11 25H2 и 26H2 на основе официальных оценочных ISO Microsoft. Образы Windows создаются заново для испытаний и не включаются в распространяемые артефакты проекта. Конкретные версии ОС и результаты каждого запуска указаны в журнале Actions; успешная компиляция сама по себе не подтверждает совместимость.
+
+В Windows 11 классический пункт контекстного меню доступен через «Показать дополнительные параметры». Расширение также предоставляет вкладку в свойствах файла и отдельное приложение `StandaloneStub.exe`.

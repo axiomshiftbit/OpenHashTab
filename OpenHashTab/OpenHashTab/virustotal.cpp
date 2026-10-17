@@ -72,7 +72,7 @@ std::list<vt::Result> vt::Query(const std::list<FileHashTask*>& files, size_t al
         "creation_datetime": "%04u-%02u-%02u %02u:%02u:%02u"
         })",
                                  hash,
-                                 utl::WideToUTF8(h->GetDisplayName().c_str()).c_str(),
+                                 json_escape(utl::WideToUTF8(h->GetDisplayName().c_str())).c_str(),
                                  st.wYear,
                                  st.wMonth,
                                  st.wDay,
@@ -129,7 +129,7 @@ std::list<vt::Result> vt::Query(const std::list<FileHashTask*>& files, size_t al
 
   auto j_child = json_getChild(j_data);
   std::unordered_map<std::string, Result> result_map;
-  do {
+  while (j_child) {
     const auto j_found = json_getProperty(j_child, "found");
     const auto j_hash = json_getProperty(j_child, "hash");
     if (j_found && j_hash && json_getType(j_found) == JSON_BOOLEAN && json_getType(j_hash) == JSON_TEXT) {
@@ -151,7 +151,7 @@ std::list<vt::Result> vt::Query(const std::list<FileHashTask*>& files, size_t al
     }
 
     j_child = json_getSibling(j_child);
-  } while (j_child);
+  }
 
   std::list<Result> result;
   for (const auto f : files) {

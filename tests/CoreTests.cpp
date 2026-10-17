@@ -4,6 +4,7 @@
 #include "SumFileParser.h"
 #include "Exporter.h"
 #include "utl.h"
+#include "json.h"
 #include <filesystem>
 #include <fstream>
 #include <cstdio>
@@ -42,6 +43,7 @@ static std::vector<uint8_t> digest(const LegacyHashAlgorithm& algorithm, std::st
   return out;
 }
 static void hashing() {
+  check(!LegacyHashAlgorithm::ByName("SHA-1")->IsSecure(), "SHA-1 is not collision resistant");
   struct Vector { const char* name; const char* input; const char* expected; };
   const Vector vectors[] = {
     {"CRC32", "123456789", "cbf43926"},
@@ -71,6 +73,12 @@ static void hashing() {
   }
 }
 static void parsers() {
+  const std::string filename = "folder\\file\"\n\t.bin";
+  const auto serialized = "{\"name\":\"" + json_escape(filename) + "\"}";
+  json_parser json(serialized.c_str());
+  check(json.root() != nullptr, "escaped JSON parses");
+  check(filename == json_getValue(json_getProperty(json.root(), "name")), "JSON path round trip");
+
   for (auto invalid : {"", "A", "AAA", "AA Z", "GG", "  A "})
     check(utl::HashStringToBytes(std::string_view(invalid)).empty(), "invalid hex rejected");
   check(utl::HashStringToBytes(std::string_view(" AA bb 00 ")) == std::vector<uint8_t>({170, 187, 0}), "spaced hex");
