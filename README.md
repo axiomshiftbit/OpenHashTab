@@ -16,7 +16,7 @@ OpenHashTab is a shell extension for conveniently calculating and checking file 
 
 ## Features
 
-* Support for 31 algorithms, see **Algorithms**
+* Support for 36 algorithms, see **Algorithms**
 * High performance hash calculation
 * Native Windows looks
 * High DPI screen support
@@ -68,11 +68,20 @@ Add a `DWORD` named `ForceDisableVT` to `HKEY_LOCAL_MACHINE\SOFTWARE\OpenHashTab
 * Blake2sp
 * SHA-1
 * SHA-2 (SHA-224, SHA-256, SHA-384, SHA-512)
+* SHA-512/224, SHA-512/256
 * SHA-3 (SHA3-224, SHA3-256, SHA3-384, SHA3-512)
+* SHAKE128 (256-bit output), SHAKE256 (512-bit output)
 * BLAKE3 (256 bit, 512 bit)
 * KangarooTwelve (264 bit, 256 bit, 512 bit)
 * ParallelHash128 (264 bit) and ParallelHash256 (528 bit)
 * Streebog (GOST R 34.11-12) (256 bit, 512 bit)
+* BelT (`belt-hash`, 256 bit)
+
+Для новой проверки целостности используйте SHA-256/512, SHA-3 или BLAKE3. MD4, MD5, SHA-1 и eD2k сохранены для совместимости и не обеспечивают стойкость к коллизиям. CRC, xxHash и QuickXorHash не являются криптографическими хешами. RIPEMD-160 ограничен примерно 80 битами общей стойкости к коллизиям. Длина результата не всегда равна уровню безопасности: вывод BLAKE3 или KangarooTwelve длиной 512 бит не превращает их в алгоритмы с 256-битной стойкостью к коллизиям.
+
+SHA-512/224 и SHA-512/256 используют собственные начальные значения по FIPS 180-4. В названиях SHAKE128-256 и SHAKE256-512 число после дефиса означает длину результата. Белорусский `belt-hash` реализован библиотекой [Bee2](https://github.com/agievich/bee2) по СТБ 34.101.31; авторство Bee2 и лицензия Apache-2.0 сохранены. Стрибог уже присутствовал в проекте под названиями `GOST 2012 (256)` и `GOST 2012 (512)`.
+
+Спецификации и происхождение эталонных данных описаны в [документации тестов](tests/HashVectors.md). Наличие алгоритма в программе и прохождение тестов не являются криптографической сертификацией.
 
 ## Download
 

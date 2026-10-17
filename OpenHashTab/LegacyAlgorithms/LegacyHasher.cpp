@@ -318,6 +318,11 @@ LegacyHashAlgorithm::AlgorithmsType& LegacyHashAlgorithm::Algorithms() {
   static const char* const xxh3_64_exts[] = {"xxh3-64", nullptr};
   static const char* const xxh3_128_exts[] = {"xxh3-128", nullptr};
   static const char* const md4_exts[] = {"md4", nullptr};
+  static const char* const sha512_224_exts[] = {"sha512-224", nullptr};
+  static const char* const sha512_256_exts[] = {"sha512-256", nullptr};
+  static const char* const shake128_256_exts[] = {"shake128-256", nullptr};
+  static const char* const shake256_512_exts[] = {"shake256-512", nullptr};
+  static const char* const belt_exts[] = {"belt-hash", nullptr};
 
   static LegacyHashAlgorithm algorithms[] =
     {
@@ -352,6 +357,11 @@ LegacyHashAlgorithm::AlgorithmsType& LegacyHashAlgorithm::Algorithms() {
       {"eD2k", 16, no_exts, "eD2k"},
       {"eD2k (Old)", 16, no_exts, "eD2k (Old)"},
       {"QuickXorHash", 20, no_exts, "QuickXorHash"},
+      {"SHA-512/224", 28, sha512_224_exts, "SHA-512/224"},
+      {"SHA-512/256", 32, sha512_256_exts, "SHA-512/256"},
+      {"SHAKE128-256", 32, shake128_256_exts, "Keccak", as_param<1344, 256, 256, 0x1f>},
+      {"SHAKE256-512", 64, shake256_512_exts, "Keccak", as_param<1088, 512, 512, 0x1f>},
+      {"belt-hash", 32, belt_exts, "belt-hash"},
   };
 
   return algorithms;

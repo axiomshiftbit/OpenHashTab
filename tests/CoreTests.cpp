@@ -8,6 +8,8 @@
 #include <filesystem>
 #include <fstream>
 #include <cstdio>
+#include "AdditionalHashVectors.h"
+#include "OfficialHashVectors.h"
 
 static void check(bool ok, const char* message) {
   if (!ok) throw std::runtime_error(message);
@@ -91,6 +93,14 @@ static void hashing() {
   }
   std::string data(2 * 1024 * 1024 + 17, '\0');
   for (size_t i = 0; i < data.size(); ++i) data[i] = static_cast<char>((i * 71 + 19) & 255);
+  for (const auto& vector : additional_vectors) {
+    const auto algorithm = LegacyHashAlgorithm::ByName(vector.name);
+    check(algorithm != nullptr, vector.name);
+    const auto expected = utl::HashStringToBytes(std::string_view(vector.expected));
+    const auto input = std::string_view(data).substr(0, vector.size);
+    check(digest(*algorithm, input, data.size()) == expected, vector.name);
+    check(digest(*algorithm, input, 127) == expected, vector.name);
+  }
   for (const auto& algorithm : LegacyHashAlgorithm::Algorithms()) {
     for (size_t size : {size_t(0), size_t(1), size_t(63), size_t(64), size_t(65), size_t(8191), size_t(8192), size_t(8193), data.size()}) {
       const auto input = std::string_view(data).substr(0, size);
@@ -98,6 +108,21 @@ static void hashing() {
     }
     std::printf("PASS: %s digest boundaries\n", algorithm.GetName());
   }
+}
+static void official_hash_vectors() {
+  for (const auto& vector : official_vectors) {
+    const auto algorithm = LegacyHashAlgorithm::ByName(vector.name);
+    check(algorithm != nullptr, vector.name);
+    // Fixture messages can be longer than the production digest-parser limit.
+    const std::string hex(vector.input_hex);
+    std::string input;
+    for (size_t i = 0; i < hex.size(); i += 2)
+      input.push_back(static_cast<char>(std::stoul(hex.substr(i, 2), nullptr, 16)));
+    const auto expected = utl::HashStringToBytes(std::string_view(vector.expected));
+    for (const size_t chunk : {size_t(1), size_t(31), size_t(127), size_t(8192)})
+      check(digest(*algorithm, input, chunk) == expected, vector.name);
+  }
+  std::printf("PASS: %zu official SHA-512/t, SHAKE, Streebog and BelT vectors, four streaming patterns each\n", std::size(official_vectors));
 }
 static void parsers() {
   const std::string filename = "folder\\file\"\n\t.bin";
@@ -178,6 +203,11 @@ static void file_hashing() {
     coordinator.settings.sumfile_banner.SetNoSave(false);
     const auto exported = Exporter::k_exporters.back()->GetExportString(&coordinator.settings, false, tasks);
     check(parse(exported).size() == 1, "SFV export/import round trip");
+    for (const auto& algorithm : LegacyHashAlgorithm::Algorithms()) {
+      const auto exporter = Exporter::k_exporters[algorithm.Idx()];
+      const auto result = parse(exporter->GetExportString(&coordinator.settings, false, tasks));
+      check(result.size() == 1 && result.front().second == task->GetHashResult()[algorithm.Idx()], "algorithm export/import round trip");
+    }
   }
   // Capture the original size, then truncate before submitting asynchronous I/O.
   Coordinator truncated({file.wstring()});
@@ -209,6 +239,40 @@ static void file_hashing() {
   missing.ProcessFiles();
   missing.WaitForCompletion();
   check(missing.GetFiles().front()->GetError() != ERROR_SUCCESS, "missing file reports failure");
+
+  Coordinator cancelled({file.wstring()});
+  cancelled.AddFiles();
+  cancelled.Cancel(false);
+  cancelled.ProcessFiles();
+  cancelled.WaitForCompletion();
+  check(cancelled.GetFiles().front()->GetError() == ERROR_CANCELLED, "cancel before asynchronous submission");
+  for (const auto& hash : cancelled.GetFiles().front()->GetHashResult()) check(hash.empty(), "cancelled file has no hash");
+
+  auto locked = CreateFileW(file.c_str(), GENERIC_READ, 0, nullptr, OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, nullptr);
+  check(locked != INVALID_HANDLE_VALUE, "exclusive fixture handle");
+  Coordinator sharing({file.wstring()});
+  sharing.AddFiles();
+  sharing.ProcessFiles();
+  sharing.WaitForCompletion();
+  CloseHandle(locked);
+  check(sharing.GetFiles().front()->GetError() == ERROR_SHARING_VIOLATION, "locked file reports sharing violation");
+
+  // Many immediate completions exercise the coordinator's publication order.
+  std::list<std::wstring> batch;
+  for (unsigned i = 0; i < 128; ++i) {
+    const auto path = root / (L"batch-" + std::to_wstring(i));
+    write(path, "");
+    batch.push_back(path.wstring());
+  }
+  Coordinator many(std::move(batch));
+  many.AddFiles();
+  many.ProcessFiles();
+  many.WaitForCompletion();
+  check(many.GetFiles().size() == 128, "batch retained every file");
+  for (const auto& task : many.GetFiles()) {
+    check(task->GetError() == ERROR_SUCCESS, "all batch tasks completed");
+    check(!task->GetHashResult()[LegacyHashAlgorithm::ByName("SHA-256")->Idx()].empty(), "batch completion publishes hashes");
+  }
 }
 int main() {
   SetErrorMode(SEM_FAILCRITICALERRORS | SEM_NOGPFAULTERRORBOX);
@@ -217,10 +281,11 @@ int main() {
     std::filesystem::create_directories(root);
     ownership();
     hashing();
+    official_hash_vectors();
     ed2k_boundaries();
     parsers();
     file_hashing();
-    std::filesystem::remove_all(root);
+    std::filesystem::remove_all(utl::MakePathLongCompatible(root.wstring()));
     std::puts("PASS: hashing, parsing, resource lifetime, asynchronous I/O and export tests");
     return 0;
   } catch (const std::exception& error) {

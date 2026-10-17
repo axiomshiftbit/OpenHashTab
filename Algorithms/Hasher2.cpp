@@ -16,6 +16,7 @@
 #include "Hasher2.h"
 
 #include <new>
+#include <algorithm>
 #include <numeric>
 #include <limits>
 
@@ -31,6 +32,8 @@
 #include "Hasher2.h"
 #include <Crc32.h>
 #include <blake3.h>
+#include <bee2/crypto/belt.h>
+#include "BeltHashState.h"
 extern "C" {
 #include "KeccakHash.h"
 #include "KangarooTwelve.h"
@@ -143,6 +146,41 @@ using Sha512HashContext = MbedHashContext<
   &mbedtls_sha512_free,
   &mbedtls_sha512_update_ret,
   &mbedtls_sha512_finish_ret
+>;
+
+// SHA-512/224 and SHA-512/256 use their own IVs (FIPS 180-4, 5.3.6),
+// not the leading bytes of an ordinary SHA-512 digest.
+template <unsigned Bits>
+int sha512_t_starts(mbedtls_sha512_context* ctx)
+{
+  static_assert(Bits == 224 || Bits == 256);
+  mbedtls_sha512_starts_ret(ctx, 0);
+  constexpr uint64_t iv224[] = {
+    0x8C3D37C819544DA2, 0x73E1996689DCD4D6, 0x1DFAB7AE32FF9C82, 0x679DD514582F9FCF,
+    0x0F6D2B697BD44DA8, 0x77E36F7304C48942, 0x3F9D85A86A1D36C8, 0x1112E6AD91D692A1
+  };
+  constexpr uint64_t iv256[] = {
+    0x22312194FC2BF72C, 0x9F555FA3C84C64C2, 0x2393B86B6F53B151, 0x963877195940EABD,
+    0x96283EE2A88EFFE3, 0xBE5E1E2553863992, 0x2B0199FC2C85B8AA, 0x0EB72DDC81C52CA2
+  };
+  std::copy_n(Bits == 224 ? iv224 : iv256, 8, ctx->state);
+  return 0;
+}
+
+template <unsigned Bits>
+int sha512_t_finish(mbedtls_sha512_context* ctx, unsigned char* output)
+{
+  unsigned char full[64];
+  const auto result = mbedtls_sha512_finish_ret(ctx, full);
+  if (result == 0)
+    std::copy_n(full, Bits / 8, output);
+  return result;
+}
+
+template <unsigned Bits>
+using Sha512THashContext = MbedHashContext<
+  mbedtls_sha512_context, Bits / 8, &mbedtls_sha512_init, &sha512_t_starts<Bits>,
+  &mbedtls_sha512_free, &mbedtls_sha512_update_ret, &sha512_t_finish<Bits>
 >;
 
 class Blake2SpHashContext final : public HashContext
@@ -702,6 +740,17 @@ public:
 using GOST34112012_256HashContext = GOST34112012HashContext<256>;
 using GOST34112012_512HashContext = GOST34112012HashContext<512>;
 
+class BeltHashContext final : public HashContext
+{
+  OhtBeltHashState ctx{};
+
+public:
+  BeltHashContext() { beltHashStart(&ctx); }
+  void Update(const void* data, size_t size) { beltHashStepH(data, size, &ctx); }
+  void Finish(uint8_t* out) { beltHashStepG(out, &ctx); }
+  size_t GetOutputSize() { return 32; }
+};
+
 class QuickXorHashContext final : public HashContext
 {
   qxhash ctx{};
@@ -857,6 +906,9 @@ constexpr HashAlgorithm k_algorithms[] = {
   make_algorithm<ED2kHashContext<false>>("eD2k", false),
   make_algorithm<ED2kHashContext<true>>("eD2k (Old)", false),
   make_algorithm<QuickXorHashContext>("QuickXorHash", false),
+  make_algorithm<Sha512THashContext<224>>("SHA-512/224", true),
+  make_algorithm<Sha512THashContext<256>>("SHA-512/256", true),
+  make_algorithm<BeltHashContext>("belt-hash", true),
 };
 
 constexpr const HashAlgorithm* k_algorithms_begin = std::begin(k_algorithms);

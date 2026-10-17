@@ -28,3 +28,6 @@
 [submodule "OpenHashTab/tiny-json"]
 	path = OpenHashTab/tiny-json
 	url = https://github.com/rafagafe/tiny-json.git
+[submodule "Algorithms/bee2/bee2"]
+	path = Algorithms/bee2/bee2
+	url = https://github.com/agievich/bee2.git

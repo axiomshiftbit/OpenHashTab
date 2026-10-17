@@ -27,6 +27,8 @@ jobs:
         run: |
           g++ -std=c++20 -g -fsanitize=address,undefined -I OpenHashTab/OpenHashTab tests/EncodingTests.cpp OpenHashTab/OpenHashTab/base64.cpp -o "$RUNNER_TEMP/encoding-tests"
           "$RUNNER_TEMP/encoding-tests"
+      - name: Verify independent algorithm vectors
+        run: python3 tests/GenerateHashVectors.py --check
 
   build:
     name: Build x86, x64 and ARM64

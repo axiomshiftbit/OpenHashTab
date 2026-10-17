@@ -31,6 +31,8 @@ with zipfile.ZipFile(output / f"OpenHashTab-{version}-Windows11-candidate.zip", 
         archive.write(path, path.name)
     for name in ("COPYING", "README.md"):
         archive.write(root / name, name)
+    for name in ("LICENSE.txt", "AUTHORS.md"):
+        archive.write(root / "Algorithms/bee2/bee2" / name, "Bee2-" + name)
     archive.writestr("BUILD.json", json.dumps(metadata, indent=2) + "\n")
     archive.writestr("SHA256SUMS.txt", "".join(f"{digest}  {name}\n" for name, digest in metadata["installers"].items()))
 
