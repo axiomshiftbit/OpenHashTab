@@ -32,7 +32,7 @@ OpenHashTab is a shell extension for conveniently calculating and checking file 
 
 ## System requirements
 
-* Windows 7 or later (x86 / x64 / ARM64)
+* Release-candidate target: Windows 11 (x64 / ARM64); 32-bit compatibility binaries are also built. Compatibility with older Windows versions has not been validated for this version.
 * 1 GB RAM or more (for efficient hashing of more than 512 files at a time)
 
 ## Usage

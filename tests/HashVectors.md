@@ -21,3 +21,14 @@ debfebc3157b3ceea002b84ca38476420389a3bf7e97dc5f53ea4689a16de4c7  shakebytetestv
 Начальные значения SHA-512/t сверены с §5.3.6 [FIPS 180-4](https://nvlpubs.nist.gov/nistpubs/FIPS/NIST.FIPS.180-4.pdf). Параметры SHAKE и разделение доменов сверены с §6.2 [FIPS 202](https://nvlpubs.nist.gov/nistpubs/FIPS/NIST.FIPS.202.pdf). SHA-512/t не является обычным усечённым SHA-512; SHAKE не является усечённым SHA3.
 
 Прохождение этих тестов не означает сертификацию FIPS/CAVP или сертификацию по национальным стандартам.
+
+Дополнительные известные ответы в `CoreTests.cpp` покрывают остальные зарегистрированные алгоритмы. Тест требует наличия хотя бы одного заранее заданного ответа для каждого из 36 названий:
+
+- XXH32/64 и XXH3-64/128: пустое сообщение и нулевой seed из `cli/xsum_sanity_check.c` закреплённого подмодуля [xxHash](https://github.com/Cyan4973/xxHash).
+- BLAKE3-256/512: префиксы официального `test_vectors/test_vectors.json` закреплённого подмодуля [BLAKE3](https://github.com/BLAKE3-team/BLAKE3).
+- BLAKE2sp: пустое сообщение без ключа из [векторов авторов BLAKE2](https://github.com/BLAKE2/BLAKE2/blob/master/testvectors/blake2-kat.json), SHA-256 загруженного JSON `5031ac14800798ae15cee79c04d65e326a575f2c968c7e2846a79bd07a1c0e61`.
+- SHA3-224/384/512 и KangarooTwelve: файлы `tests/TestVectors/ShortMsgKAT_SHA3-*.txt` и `KangarooTwelve.txt` закреплённого [XKCP](https://github.com/XKCP/XKCP). Для K12-264 проверяется 33-байтный префикс опубликованного 64-байтного ответа; размер результата не меняет префикс XOF.
+- CRC64/XZ: `123456789`, проверено независимой `lzma_crc64` из XZ Utils; [формат XZ](https://tukaani.org/xz/format.html). RIPEMD-160: `abc`, проверено OpenSSL/hashlib и соответствует [примерам авторов](https://homes.esat.kuleuven.be/~bosselae/ripemd160.html).
+- eD2k обоих вариантов: `abc` совпадает с MD4 сообщения короче блока; дополнительно проверяются границы блоков и составной результат. QuickXorHash пустого сообщения — 20 нулевых байтов по [описанию Microsoft](https://learn.microsoft.com/en-us/onedrive/developer/code-snippets/quickxorhash).
+
+`StreamingHashVectors.h` содержит ещё 123 опубликованных примера: все 35 длин BLAKE3 из авторского JSON для вывода 256 и 512 бит; 12 длин BLAKE2sp из указанного JSON; все 35 случаев xxHash с нулевым seed из перечисленных таблиц; шесть примеров K12-256 длиной `17^0` … `17^5` из XKCP. Каждый проверяется порциями 1, 127 и 8192 байта — 369 сравнений, включая переходы дерева BLAKE3 и K12. Шаблон 0 означает байт `i % 251`, шаблон 1 — `i % 256`; шаблон 2 повторяет `XSUM_fillTestBuffer`: начальное 64-битное значение `2654435761`, байт `value >> 56`, затем умножение на `11400714785074694797` по модулю `2^64`. Это генерация входных данных, ожидаемые хеши взяты из опубликованных таблиц.

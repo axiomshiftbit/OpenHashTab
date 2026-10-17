@@ -10,6 +10,7 @@
 #include <cstdio>
 #include "AdditionalHashVectors.h"
 #include "OfficialHashVectors.h"
+#include "StreamingHashVectors.h"
 
 static void check(bool ok, const char* message) {
   if (!ok) throw std::runtime_error(message);
@@ -81,6 +82,24 @@ static void hashing() {
     {"SHA-512", "abc", "ddaf35a193617abacc417349ae20413112e6fa4e89a97ea20a9eeee64b55d39a2192992a274fc1a836ba3c23a3feebbd454d4423643ce80e2a9ac94fa54ca49f"},
     {"SHA3-256", "abc", "3a985da74fe225b2045c172d6bd390bd855f086e3e9d525b46bfe24511431532"},
     {"BLAKE3", "", "af1349b9f5f9a1a6a0404dea36dcc9499bcb25c9adc112b7cc9a93cae41f3262"},
+    // Published upstream vectors and independent reference values; see HashVectors.md.
+    {"CRC64", "123456789", "995dc9bbdf1939fa"},
+    {"XXH32", "", "02cc5d05"},
+    {"XXH64", "", "ef46db3751d8e999"},
+    {"XXH3-64", "", "2d06800538d394c2"},
+    {"XXH3-128", "", "99aa06d3014798d86001c324468d497f"},
+    {"RipeMD160", "abc", "8eb208f7e05d987a9b044a8e98c6b087f15a0bfc"},
+    {"Blake2sp", "", "dd0e891776933f43c7d032b08a917e25741f8aa9a12c12e1cac8801500f2ca4f"},
+    {"SHA3-224", "", "6b4e03423667dbb73b6e15454f0eb1abd4597f9a1b078e3f5b5a6bc7"},
+    {"SHA3-384", "", "0c63a75b845e4f7d01107d852e4c2485c51a50aaaa94fc61995e71bbee983a2ac3713831264adb47fb6bd1e058d5f004"},
+    {"SHA3-512", "", "a69f73cca23a9ac5c8b567dc185a756e97c982164fe25859e0d1dcc1475c80a615b2123af1f5f94c11e3e9402c3ac558f500199d95b6d3e301758586281dcd26"},
+    {"K12-264", "", "1ac2d450fc3b4205d19da7bfca1b37513c0803577ac7167f06fe2ce1f0ef39e542"},
+    {"K12-256", "", "1ac2d450fc3b4205d19da7bfca1b37513c0803577ac7167f06fe2ce1f0ef39e5"},
+    {"K12-512", "", "1ac2d450fc3b4205d19da7bfca1b37513c0803577ac7167f06fe2ce1f0ef39e54269c056b8c82e48276038b6d292966cc07a3d4645272e31ff38508139eb0a71"},
+    {"BLAKE3-512", "", "af1349b9f5f9a1a6a0404dea36dcc9499bcb25c9adc112b7cc9a93cae41f3262e00f03e7b69af26b7faaf09fcd333050338ddfe085b8cc869ca98b206c08243a"},
+    {"eD2k", "abc", "a448017aaf21d8525fc10ae87aa6729d"},
+    {"eD2k (Old)", "abc", "a448017aaf21d8525fc10ae87aa6729d"},
+    {"QuickXorHash", "", "0000000000000000000000000000000000000000"},
     // Independently composed from SHAKE/cSHAKE per NIST SP 800-185, B=8192.
     {"PH128-264", "", "922fa19859b2c701f0d9d8e3eed3cb7fb8910af6220bff0f6b8f062dbfa3bd3331"},
     {"PH128-264", "abc", "493a6004492b1b7b14be32fe0bbb4f780183cb8311c17f9ac2ab0454d8940b1f33"},
@@ -103,6 +122,10 @@ static void hashing() {
     check(digest(*algorithm, input, 127) == expected, vector.name);
   }
   for (const auto& algorithm : LegacyHashAlgorithm::Algorithms()) {
+    const auto name = std::string_view(algorithm.GetName());
+    check(std::any_of(std::begin(vectors), std::end(vectors), [&](const auto& v) { return name == v.name; }) ||
+        std::any_of(std::begin(official_vectors), std::end(official_vectors), [&](const auto& v) { return name == v.name; }),
+        "every registered algorithm needs a known-answer vector");
     for (size_t size : {size_t(0), size_t(1), size_t(63), size_t(64), size_t(65), size_t(8191), size_t(8192), size_t(8193), data.size()}) {
       const auto input = std::string_view(data).substr(0, size);
       check(digest(algorithm, input, data.size()) == digest(algorithm, input, 127), algorithm.GetName());
@@ -124,6 +147,22 @@ static void official_hash_vectors() {
       check(digest(*algorithm, input, chunk) == expected, vector.name);
   }
   std::printf("PASS: %zu official SHA-512/t, SHAKE, Streebog and BelT vectors, four streaming patterns each\n", std::size(official_vectors));
+}
+static void streaming_hash_vectors() {
+  for (const auto& vector : streaming_vectors) {
+    const auto algorithm = LegacyHashAlgorithm::ByName(vector.name);
+    check(algorithm != nullptr, vector.name);
+    std::string input(vector.size, '\0');
+    uint64_t generator = 2654435761U;
+    for (size_t i = 0; i < input.size(); ++i) {
+      input[i] = static_cast<char>(vector.pattern == 2 ? generator >> 56 : i % (vector.pattern == 0 ? 251 : 256));
+      generator *= 11400714785074694797ULL;
+    }
+    const auto expected = utl::HashStringToBytes(std::string_view(vector.expected));
+    for (const size_t chunk : {size_t(1), size_t(127), size_t(8192)})
+      check(digest(*algorithm, input, chunk) == expected, vector.name);
+  }
+  std::printf("PASS: %zu published xxHash, BLAKE2sp, BLAKE3 and K12 vectors, three streaming patterns each\n", std::size(streaming_vectors));
 }
 static void parsers() {
   const std::string filename = "folder\\file\"\n\t.bin";
@@ -316,6 +355,7 @@ int main() {
     ownership();
     hashing();
     official_hash_vectors();
+    streaming_hash_vectors();
     ed2k_boundaries();
     parsers();
     file_hashing();
