@@ -2,6 +2,7 @@ import importlib.util
 import io
 import json
 import pathlib
+import tempfile
 import unittest
 from unittest.mock import patch
 
@@ -11,6 +12,24 @@ spec.loader.exec_module(scanner)
 
 
 class VulnerabilityQueries(unittest.TestCase):
+    def test_restored_assets_include_wix_and_custom_build_paths(self):
+        for directory in ("Setup/obj", "build/wix_Machine_x64"):
+            with self.subTest(directory=directory), tempfile.TemporaryDirectory() as temporary:
+                root = pathlib.Path(temporary)
+                manifest = root / directory / "project.assets.json"
+                manifest.parent.mkdir(parents=True)
+                manifest.write_text(json.dumps({"libraries": {"Fixture.Transitive/1.2.3": {"type": "package"}}}), encoding="utf-8-sig")
+                with patch.object(scanner, "ROOT", root), patch.object(scanner.subprocess, "check_output", return_value=" " + "a" * 40 + " dependency\n"):
+                    queries = scanner.dependencies(assets=True)
+                self.assertEqual(queries["NuGet: Fixture.Transitive@1.2.3"], {
+                    "package": {"name": "Fixture.Transitive", "ecosystem": "NuGet"}, "version": "1.2.3"})
+
+    def test_missing_restored_assets_cannot_pass(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            with patch.object(scanner, "ROOT", pathlib.Path(temporary)), patch.object(scanner.subprocess, "check_output", return_value=" " + "a" * 40 + " dependency\n"):
+                with self.assertRaisesRegex(ValueError, "No restored NuGet"):
+                    scanner.dependencies(assets=True)
+
     def test_nvd_new_advisory_cannot_be_silently_excluded(self):
         data = {"vulnerabilities": [{"cve": {"id": "CVE-2099-12345", "descriptions": []}}], "totalResults": 1}
         with patch.object(scanner, "check_mbedtls_build"), patch.object(scanner.time, "sleep"), patch.object(scanner.urllib.request, "urlopen", side_effect=lambda *a, **kw: io.BytesIO(json.dumps(data).encode())):

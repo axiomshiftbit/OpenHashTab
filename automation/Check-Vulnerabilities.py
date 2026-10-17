@@ -177,7 +177,10 @@ def dependencies(assets=False):
                 package("GitHub Actions", name, version[1])
 
     if assets:
-        manifests = list((ROOT / "build").rglob("project.assets.json"))
+        # NuGet uses MSBuildProjectExtensionsPath (Setup/obj by default),
+        # independently of WiX's custom IntermediateOutputPath under build.
+        manifests = [manifest for directory in (ROOT / "Setup/obj", ROOT / "build")
+                     for manifest in directory.rglob("project.assets.json")]
         if not manifests:
             raise ValueError("No restored NuGet dependency manifests found")
         for manifest in manifests:
