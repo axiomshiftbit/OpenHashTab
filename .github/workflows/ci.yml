@@ -100,12 +100,13 @@ jobs:
         shell: pwsh
         run: |
           $ErrorActionPreference = 'Stop'
-          $sdk = (Get-Item 'HKLM:\SOFTWARE\WOW6432Node\Microsoft\Microsoft SDKs\Windows').GetValue('CurrentInstallFolder')
+          $sdk = Get-ItemPropertyValue 'HKLM:\SOFTWARE\Microsoft\Windows Kits\Installed Roots' -Name KitsRoot10
           foreach ($architecture in @('x86', 'x64', 'arm64')) {
             $library = Join-Path $sdk "Lib/10.0.26100.0/um/$architecture/ntdllp.lib"
             if (-not (Test-Path $library)) { throw "The installed WDK is incomplete: $library" }
           }
           if (-not (Test-Path (Join-Path $sdk 'Include/10.0.26100.0/um/Windows.h'))) { throw 'Windows SDK 26100 is missing.' }
+          "WindowsSdkDir=$sdk" >> $env:GITHUB_ENV
           'WindowsTargetPlatformVersion=10.0.26100.0' >> $env:GITHUB_ENV
       - name: Build and run native x86/x64 tests
         shell: pwsh
