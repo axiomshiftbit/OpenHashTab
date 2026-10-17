@@ -270,9 +270,11 @@ static void file_hashing() {
   check(cancelled.GetFiles().front()->GetError() == ERROR_CANCELLED, "cancel before asynchronous submission");
   for (const auto& hash : cancelled.GetFiles().front()->GetHashResult()) check(hash.empty(), "cancelled file has no hash");
 
-  auto locked = CreateFileW(file.c_str(), GENERIC_READ, 0, nullptr, OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, nullptr);
+  const auto locked_file = root / L"locked.bin";
+  write(locked_file, "abc");
+  auto locked = CreateFileW(locked_file.c_str(), GENERIC_READ, 0, nullptr, OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, nullptr);
   check(locked != INVALID_HANDLE_VALUE, "exclusive fixture handle");
-  Coordinator sharing({file.wstring()});
+  Coordinator sharing({locked_file.wstring()});
   sharing.AddFiles();
   sharing.ProcessFiles();
   sharing.WaitForCompletion();
