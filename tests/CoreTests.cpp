@@ -208,6 +208,16 @@ static void parsers() {
   }
   check(parse("\xef\xbb\xbf" "352441c2 *file.bin\n").size() == 1, "UTF-8 BOM");
   check(parse("NSRBwg== *file.bin\n").size() == 1, "base64 sumfile");
+  for (const auto prefix : {"352441c2 *", "352441c2  ", "NSRBwg== *", "NSRBwg==  "}) {
+    const auto result = parse(std::string(prefix) + "file deadbeef\n");
+    check(result.size() == 1 && result.front().first == "file deadbeef" &&
+          result.front().second == utl::HashStringToBytes(std::string_view("352441c2")),
+          "GNU checksum filename ending in hex is not misread as SFV");
+  }
+  for (const auto name : {"README", "123456789"}) {
+    const auto result = parse(std::string(name) + "  352441c2\n");
+    check(result.size() == 1 && result.front().first == name, "SFV after an invalid GNU digest candidate");
+  }
   check(parse("NSRBw== *file.bin\n").empty(), "malformed base64 sumfile");
   check(parse("352441c2\n").size() == 1, "single hash");
   const std::string nul("352441c2 *file\0hidden.bin\n", 26);

@@ -56,6 +56,31 @@ public:
       return true;
     }
 
+    // Prefer the explicit GNU checksum + mode marker format. Otherwise a
+    // filename ending in eight hex digits can be mistaken for an SFV checksum.
+    if ((_hash == HashStyle::Unknown || _hash == HashStyle::Hex)) {
+      if (auto [whole, hash_str, file] = k_regex_hex(sv); whole) {
+        auto hash = utl::HashStringToBytes(std::string_view{hash_str});
+        if (!hash.empty() && hash.size() <= LegacyHashAlgorithm::k_max_size) {
+          _hash = HashStyle::Hex;
+          files.emplace_back(file, std::move(hash));
+          return true;
+        }
+      }
+    }
+
+    if ((_hash == HashStyle::Unknown || _hash == HashStyle::Base64)) {
+      if (auto [whole, hash_match, file] = k_regex_b64(sv); whole) {
+        const auto hash_str = std::string(hash_match);
+        auto hash = b64::decode(hash_str.c_str(), hash_str.size());
+        if (!hash.empty() && hash.size() <= LegacyHashAlgorithm::k_max_size) {
+          _hash = HashStyle::Base64;
+          files.emplace_back(file, std::move(hash));
+          return true;
+        }
+      }
+    }
+
     if ((_hash == HashStyle::Unknown || _hash == HashStyle::Sfv)) {
       if (auto [whole, file_match, hash_str] = k_regex_sfv(sv); whole) {
         _hash = HashStyle::Sfv;
@@ -66,29 +91,6 @@ public:
         auto hash = utl::HashStringToBytes(std::string_view{hash_str});
         if (!hash.empty()) {
           files.emplace_back(std::move(file), std::move(hash));
-          return true;
-        }
-      }
-    }
-
-    if ((_hash == HashStyle::Unknown || _hash == HashStyle::Hex)) {
-      if (auto [whole, hash_str, file] = k_regex_hex(sv); whole) {
-        _hash = HashStyle::Hex;
-        auto hash = utl::HashStringToBytes(std::string_view{hash_str});
-        if (!hash.empty() && hash.size() <= LegacyHashAlgorithm::k_max_size) {
-          files.emplace_back(file, std::move(hash));
-          return true;
-        }
-      }
-    }
-
-    if ((_hash == HashStyle::Unknown || _hash == HashStyle::Base64)) {
-      if (auto [whole, hash_match, file] = k_regex_b64(sv); whole) {
-        _hash = HashStyle::Base64;
-        const auto hash_str = std::string(hash_match);
-        auto hash = b64::decode(hash_str.c_str(), hash_str.size());
-        if (!hash.empty() && hash.size() <= LegacyHashAlgorithm::k_max_size) {
-          files.emplace_back(file, std::move(hash));
           return true;
         }
       }
