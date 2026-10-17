@@ -15,6 +15,47 @@ jobs:
   security:
     uses: ./.github/workflows/security.yml
 
+  codeql-actions:
+    name: CodeQL for GitHub Actions
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    permissions:
+      contents: read
+      security-events: write
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Initialize workflow analysis
+        uses: github/codeql-action/init@f051dc808ef3645eb0d08647ec751634ec2304ac
+        with:
+          languages: actions
+          queries: security-extended
+      - name: Analyze GitHub Actions
+        uses: github/codeql-action/analyze@f051dc808ef3645eb0d08647ec751634ec2304ac
+        with:
+          category: /language:actions
+          output: ${{ runner.temp }}/codeql-actions
+      - name: Reject workflow security findings
+        run: |
+          python3 - <<'PY'
+          import json
+          import os
+          from pathlib import Path
+          files = list((Path(os.environ['RUNNER_TEMP']) / 'codeql-actions').glob('*.sarif'))
+          if not files:
+              raise SystemExit('CodeQL did not produce a workflow analysis result.')
+          findings = 0
+          for path in files:
+              for run in json.loads(path.read_text())['runs']:
+                  for result in run.get('results', []):
+                      print(f"{result['ruleId']}: {result['message']['text']}")
+                      if result.get('level', 'warning') in ('warning', 'error'):
+                          findings += 1
+          if findings:
+              raise SystemExit(f'{findings} workflow findings require review and correction.')
+          PY
+
   encoding:
     name: Encoding sanitizers
     runs-on: ubuntu-24.04
@@ -185,7 +226,7 @@ jobs:
 
   package:
     name: Package verified release candidate
-    needs: [security, encoding, build, arm64, windows11]
+    needs: [security, codeql-actions, encoding, build, arm64, windows11]
     runs-on: ubuntu-24.04
     timeout-minutes: 15
     steps:
