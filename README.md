@@ -129,7 +129,7 @@ All original code in this repo is licensed under the following license, unless e
     You should have received a copy of the GNU General Public License
     along with OpenHashTab.  If not, see <https://www.gnu.org/licenses/>.
 
-This software also contains or uses code from various other sources, for a complete list see [InstallerLicense.rtf](Setup/InstallerLicense.rtf)
+This software also contains or uses code from other sources; see [InstallerLicense.rtf](Setup/InstallerLicense.rtf), the [Bee2 license](Algorithms/bee2/bee2/LICENSE.txt) and [Bee2 authors](Algorithms/bee2/bee2/AUTHORS.md). The Bee2 notices are also included in the installer and release-candidate archive.
 
 ## Сборка и проверка
 

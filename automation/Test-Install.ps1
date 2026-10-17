@@ -64,7 +64,7 @@ function Assert-Installed([string]$Scope, [string]$Product) {
     if ((Get-Item $dll).VersionInfo.FileVersion -notlike "$version*") { throw 'Installed binary version differs from VERSION.' }
     $directory = Split-Path $dll
     Copy-Item "$root\binaries\oht-$Architecture\Tests\ShellTests.exe" "$logDirectory\ShellTests.exe" -Force
-    & "$logDirectory\ShellTests.exe" "$dll"
+    & "$logDirectory\ShellTests.exe" "$dll" | Write-Host
     if ($LASTEXITCODE -ne 0) { throw 'Registered shell extension tests failed.' }
     $sample = Join-Path $logDirectory 'sample with spaces.txt'
     [IO.File]::WriteAllText($sample, 'abc')
