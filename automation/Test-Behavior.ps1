@@ -6,6 +6,7 @@ $root = Split-Path $PSScriptRoot
 $directory = Join-Path $root 'security-tools'
 $log = 'Microsoft-Windows-Sysmon/Operational'
 $images = '\\(CoreTests|EncodingTests|ShellTests|StandaloneStub)\.exe$'
+. "$PSScriptRoot\DefenderScan.ps1"
 if ($Stage -eq 'Start') {
     $null = New-Item -ItemType Directory $directory -Force
     $zip = Join-Path $directory 'Sysmon.zip'
@@ -48,10 +49,23 @@ if ($Stage -eq 'Start') {
     if (-not $status.AntivirusEnabled -or $status.AntivirusSignatureLastUpdated -lt (Get-Date).AddDays(-3)) {
         throw 'Defender must be enabled and have current signatures.'
     }
-    $scanStart = Get-Date
+    $defenderLog = 'Microsoft-Windows-Windows Defender/Operational'
+    $lastRecord = (Get-WinEvent -LogName $defenderLog -MaxEvents 1).RecordId
     Start-MpScan -ScanType CustomScan -ScanPath $root
-    $events = @(Get-WinEvent -FilterHashtable @{LogName='Microsoft-Windows-Windows Defender/Operational'; Id=1001; StartTime=$scanStart} -ErrorAction SilentlyContinue)
-    if ($events.Count -eq 0) { throw 'Defender did not record a completed scan.' }
+    # Defender and its event log complete asynchronously. Require the start
+    # event for this directory and a completion with the same Scan ID.
+    $deadline = (Get-Date).AddMinutes(10)
+    $completed = $false
+    do {
+        $events = @(Get-WinEvent -LogName $defenderLog -FilterXPath "*[System[(EventID=1000 or EventID=1001 or EventID=1002) and EventRecordID > $lastRecord]]" -ErrorAction SilentlyContinue |
+            Sort-Object RecordId)
+        $state = Get-CandidateScanState -Events $events -Directory $root
+        if ($state -eq 'Cancelled') { throw 'Defender cancelled the candidate scan.' }
+        $completed = $state -eq 'Completed'
+        if (-not $completed) { Start-Sleep -Seconds 2 }
+    } until ($completed -or (Get-Date) -ge $deadline)
+    $events | Format-List Id, RecordId, Message
+    if (-not $completed) { throw 'Defender did not record a completed scan of the candidate directory within ten minutes.' }
     if (@(Get-MpThreatDetection).Count -gt 0) { throw 'Defender reported a threat in this clean test VM.' }
     Write-Host 'PASS: Defender scanned the candidate files with current signatures.'
     return
