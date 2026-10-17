@@ -78,6 +78,7 @@ def dependencies(assets=False):
             if reference.startswith("./"):
                 continue
             name, commit = reference.rsplit("@", 1)
+            name = "/".join(name.split("/")[:2])
             if not re.fullmatch(r"[0-9a-f]{40}", commit):
                 raise ValueError(f"Action {name} must be pinned to a full commit")
             queries[f"Git: {name}@{commit}"] = {"commit": commit}

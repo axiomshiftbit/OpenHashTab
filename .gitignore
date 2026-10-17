@@ -8,3 +8,4 @@ binaries/
 installers/
 baseline/
 msi-logs/
+__pycache__/

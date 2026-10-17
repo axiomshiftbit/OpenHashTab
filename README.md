@@ -98,7 +98,7 @@ See [build_all.ps1](build_all.ps1)
 
 ## Relationship to HashTab
 
-HashTab was a similar purpose proprietary software. While this software has been inspired by it, I was never a user of HashTab and this software contains no code or resources related to it.
+HashTab was a similar purpose proprietary application. The original OpenHashTab README described it as an inspiration. This repository preserves the original authorship and license notices; those notices are not an independent determination of copyright ownership. The original repository is subject to a [published DMCA notice](https://github.com/github/dmca/blob/master/2026/05/2026-05-07-source-code-3.md).
 
 ## License
 
@@ -120,7 +120,7 @@ All original code in this repo is licensed under the following license, unless e
     You should have received a copy of the GNU General Public License
     along with OpenHashTab.  If not, see <https://www.gnu.org/licenses/>.
 
-This software also contains or uses code from various other sources, for a complete list see [InstallerLicense.rtf](InstallerLicense.rtf)
+This software also contains or uses code from various other sources, for a complete list see [InstallerLicense.rtf](Setup/InstallerLicense.rtf)
 
 ## Сборка и проверка
 
@@ -129,3 +129,9 @@ This software also contains or uses code from various other sources, for a compl
 GitHub Actions собирает варианты x86, x64 и ARM64, запускает тесты алгоритмов и обработки файлов. Для проверки установщика предусмотрены отдельные виртуальные машины Windows 11 25H2 и 26H2 на основе официальных оценочных ISO Microsoft. Образы Windows создаются заново для испытаний и не включаются в распространяемые артефакты проекта. Конкретные версии ОС и результаты каждого запуска указаны в журнале Actions; успешная компиляция сама по себе не подтверждает совместимость.
 
 В Windows 11 классический пункт контекстного меню доступен через «Показать дополнительные параметры». Расширение также предоставляет вкладку в свойствах файла и отдельное приложение `StandaloneStub.exe`.
+
+Проверка зависимостей через [OSV](https://osv.dev/) выполняется при сборке и еженедельно. Она проверяет закреплённые коммиты подмодулей и Actions, версии пакетов WiX/NuGet, а после восстановления пакетов — также транзитивные зависимости NuGet. При недоступности базы проверка завершается ошибкой. Локальный запуск: `python3 automation/Check-Vulnerabilities.py`; после сборки — с параметром `--assets`. Отсутствие совпадений в базе не гарантирует отсутствия уязвимостей.
+
+Для собранного C/C++ включён CodeQL с набором `security-extended`. В одноразовых Windows VM предусмотрены сканирование Microsoft Defender с актуальными сигнатурами и проверка событий Sysmon во время вычисления хешей, установки, обновления, восстановления и удаления. Проверяются сетевые обращения, запуск дочерних процессов, операции с реестром, доступ к физическим дискам и создание потоков в других процессах. Эти сценарии ограничены синтетическими тестовыми данными и не доказывают безопасность всех возможных путей исполнения.
+
+Обычное вычисление хешей выполняется локально. Кнопка VirusTotal использует внешнюю службу: после согласия пользователя исходная интеграция отправляет хеш, путь и дату создания файла. Не используйте её для конфиденциальных путей; администратор может отключить кнопку параметром `ForceDisableVT`, описанным выше. Проверка обновлений обращается к GitHub по отдельному действию пользователя.

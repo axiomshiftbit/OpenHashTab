@@ -126,6 +126,30 @@ static void parsers() {
   check(ProcessEverything({}, &settings).files.empty(), "empty selection");
   check(utl::MakePathLongCompatible(L"\\\\server\\share\\file") == L"\\\\?\\UNC\\server\\share\\file", "long UNC prefix");
 }
+static void ed2k_boundaries() {
+  constexpr size_t block = 9728000;
+  const auto md4 = LegacyHashAlgorithm::ByName("MD4");
+  const std::string data(3 * block + 1, 'a');
+  for (const auto size : {block - 1, block, block + 1, 2 * block, 3 * block + 1}) {
+    const auto input = std::string_view(data).substr(0, size);
+    for (const bool old : {false, true}) {
+      std::string hashes;
+      for (size_t offset = 0; offset < size; offset += block) {
+        const auto hash = digest(*md4, input.substr(offset, block), block);
+        hashes.append(reinterpret_cast<const char*>(hash.data()), hash.size());
+      }
+      if (old && size >= block && size % block == 0) {
+        const auto empty = digest(*md4, "", 1);
+        hashes.append(reinterpret_cast<const char*>(empty.data()), empty.size());
+      }
+      const auto expected = size < block || (!old && size == block)
+          ? digest(*md4, input, block) : digest(*md4, hashes, hashes.size());
+      const auto algorithm = LegacyHashAlgorithm::ByName(old ? "eD2k (Old)" : "eD2k");
+      check(digest(*algorithm, input, data.size()) == expected, "eD2k multiple blocks in one Update");
+      check(digest(*algorithm, input, 8192) == expected, "eD2k streaming chunk boundaries");
+    }
+  }
+}
 static void file_hashing() {
   const auto tree = root / L"reparse";
   write(tree / L"target.txt", "abc");
@@ -188,6 +212,7 @@ int main() {
     std::filesystem::create_directories(root);
     ownership();
     hashing();
+    ed2k_boundaries();
     parsers();
     file_hashing();
     std::filesystem::remove_all(root);

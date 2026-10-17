@@ -269,14 +269,13 @@ public:
 
   void Update(const void* data, size_t size)
   {
-    const auto bytes = (const uint8_t*)data;
-    const auto needed_for_next_chunk = (size_t)(((hashed / k_chunk_size) + 1) * k_chunk_size - hashed);
-    const auto first_part = std::min(needed_for_next_chunk, size);
-    const auto second_part = size - first_part;
-
-    UpdateInternal(bytes, first_part);
-    if (second_part)
-      UpdateInternal(bytes + first_part, second_part);
+    auto bytes = (const uint8_t*)data;
+    while (size) {
+      const auto count = std::min(size, (size_t)(k_chunk_size - hashed % k_chunk_size));
+      UpdateInternal(bytes, count);
+      bytes += count;
+      size -= count;
+    }
   }
 
   void Finish(uint8_t* out)

@@ -27,6 +27,7 @@ try {
         $previous = [datetime](Get-Content "$root\reboot-pending" -Raw)
         if ($os.LastBootUpTime.ToUniversalTime() -le $previous) { throw 'A real reboot was not observed.' }
         & "$root\automation\Test-Install.ps1" -Stage AfterReboot -Architecture x64
+        & "$root\automation\Test-Behavior.ps1" -Stage Verify
         $success = $true
     } else {
         # Install the current cumulative update using Microsoft's Windows Update API.
@@ -54,6 +55,7 @@ try {
             Restart-Computer -Force
             exit
         }
+        & "$root\automation\Test-Behavior.ps1" -Stage Start
         foreach ($architecture in @('x86', 'x64')) {
             & "$root\binaries\oht-$architecture\Tests\CoreTests.exe"
             if ($LASTEXITCODE -ne 0) { throw "Core tests failed: $architecture" }
