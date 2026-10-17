@@ -199,16 +199,18 @@ BEGIN
     BEGIN
       VALUE "CompanyName", "namazso"
       VALUE "FileDescription", "OpenHashTab Shell Extension"
+      VALUE "FileVersion", CI_VERSION
       VALUE "InternalName", "OpenHashTab.dll"
       VALUE "LegalCopyright", "(c) namazso. Licensed under GNU GPLv3 or (at your option) later."
       VALUE "OriginalFilename", "OpenHashTab.dll"
       VALUE "ProductName", "OpenHashTab"
+      VALUE "ProductVersion", CI_VERSION
     END
   END
 
   BLOCK "VarFileInfo"
   BEGIN
-    VALUE "Translation", 0x409, 1252
+    VALUE "Translation", 0x409, 1200
   END
 END
 

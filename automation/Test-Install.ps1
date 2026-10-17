@@ -34,11 +34,11 @@ function Assert-DisplayedHash([Diagnostics.Process]$Process) {
 function Read-MsiProperty([string]$Path, [string]$Name) {
     $db = $installer.OpenDatabase($Path, 0)
     $view = $db.OpenView("SELECT ``Value`` FROM ``Property`` WHERE ``Property``='$Name'")
-    $view.Execute()
+    [void]$view.Execute()
     $record = $view.Fetch()
     if (-not $record) { throw "Missing MSI property: $Name" }
-    $value = $record.StringData(1)
-    $view.Close()
+    [string]$value = $record.StringData(1)
+    [void]$view.Close()
     [void][Runtime.InteropServices.Marshal]::FinalReleaseComObject($record)
     [void][Runtime.InteropServices.Marshal]::FinalReleaseComObject($view)
     [void][Runtime.InteropServices.Marshal]::FinalReleaseComObject($db)
@@ -95,7 +95,8 @@ if ($Stage -ne 'AfterReboot') {
 foreach ($scope in @('Machine', 'User')) {
     $package = (Get-Item "$root\installers\OpenHashTab_${scope}_${Architecture}.msi").FullName
     $product = Read-MsiProperty $package 'ProductCode'
-    if ((Read-MsiProperty $package 'ProductVersion') -ne $version) { throw 'MSI version differs from VERSION.' }
+    $packageVersion = Read-MsiProperty $package 'ProductVersion'
+    if ($packageVersion -ne $version) { throw "MSI version '$packageVersion' differs from VERSION '$version'." }
     if ($Stage -eq 'AfterReboot') {
         if ($scope -eq 'Machine') {
             $null = Assert-Installed $scope $product
