@@ -23,6 +23,9 @@
 
 #undef APSTUDIO_READONLY_SYMBOLS
 
+// DLL activation context: preserve the XML without linker manifest merging.
+ISOLATIONAWARE_MANIFEST_RESOURCE_ID RT_MANIFEST "additional.manifest"
+
 #define MUL0(a) (0)
 #define MUL1(a) (a)
 #define MUL2(a) (a+a)

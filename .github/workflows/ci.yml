@@ -176,6 +176,7 @@ jobs:
           $os = Get-CimInstance Win32_OperatingSystem
           $os | Select-Object Caption, Version, BuildNumber, OSArchitecture | Format-List
           if ($os.Caption -notmatch 'Windows 11' -or [int]$os.BuildNumber -lt 22000) { throw 'A Windows 11 client is required.' }
+          & ./binaries/oht-arm64/Tests/ShellTests.exe --load-only (Resolve-Path ./binaries/oht-arm64/OpenHashTab64.dll).Path
           & ./binaries/oht-arm64/Tests/CoreTests.exe
           & ./binaries/oht-arm64/Tests/EncodingTests.exe
 

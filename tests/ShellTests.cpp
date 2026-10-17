@@ -74,6 +74,18 @@ static bool window_and_popup_menus(IContextMenu* context) {
 }
 int wmain(int argc, wchar_t** argv) {
   SetErrorMode(SEM_FAILCRITICALERRORS | SEM_NOGPFAULTERRORBOX);
+  if (argc == 3 && std::wstring(argv[1]) == L"--load-only") {
+    const auto module = LoadLibraryExW(argv[2], nullptr, LOAD_LIBRARY_SEARCH_DLL_LOAD_DIR | LOAD_LIBRARY_SEARCH_SYSTEM32);
+    if (!module) {
+      std::fprintf(stderr, "FAIL: load shell extension DLL (Win32 error %lu)\n", GetLastError());
+      return 1;
+    }
+    const bool exported = GetProcAddress(module, "DllGetClassObject") != nullptr;
+    FreeLibrary(module);
+    if (!exported) return 1;
+    std::puts("PASS: shell extension manifest and DLL load");
+    return 0;
+  }
   if (argc != 2) return 2;
   if (!ok(CoInitializeEx(nullptr, COINIT_APARTMENTTHREADED), "COM initialization")) return 1;
   CLSID clsid{};

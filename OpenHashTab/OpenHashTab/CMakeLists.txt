@@ -18,7 +18,8 @@ cmake_minimum_required(VERSION 3.14)
 
 project(ShellExtension)
 
-file(GLOB FILES CONFIGURE_DEPENDS *.cpp *.rc *.manifest)
+file(GLOB FILES CONFIGURE_DEPENDS *.cpp *.rc)
+set_property(SOURCE OpenHashTab.rc APPEND PROPERTY OBJECT_DEPENDS "${CMAKE_CURRENT_SOURCE_DIR}/additional.manifest")
 
 add_library(OpenHashTab SHARED ${FILES})
 
@@ -54,6 +55,9 @@ target_compile_options(OpenHashTab PRIVATE
         )
 
 target_link_options(OpenHashTab PRIVATE
+        # Embed the checked XML through the resource compiler. LLVM's manifest
+        # merger can corrupt UAC attribute namespaces (LLVM issue #120394).
+        /MANIFEST:NO
         /EXPORT:DllCanUnloadNow
         /EXPORT:DllGetClassObject
         /DELAYLOAD:winhttp.dll
