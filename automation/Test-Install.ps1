@@ -14,6 +14,23 @@ $installer = New-Object -ComObject WindowsInstaller.Installer
 $logDirectory = Join-Path $root 'msi-logs'
 $null = New-Item -ItemType Directory $logDirectory -Force
 $clsid = '{23B5BDD4-7669-42B8-9CDC-BEEBC8A5BAA9}'
+Add-Type -AssemblyName UIAutomationClient, UIAutomationTypes
+function Assert-DisplayedHash([Diagnostics.Process]$Process) {
+    $expected = 'ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad'
+    for ($attempt = 0; $attempt -lt 100; ++$attempt) {
+        if ($Process.HasExited) { throw 'Standalone exited before displaying its result.' }
+        $window = [Windows.Automation.AutomationElement]::FromHandle($Process.MainWindowHandle)
+        $elements = $window.FindAll([Windows.Automation.TreeScope]::Descendants, [Windows.Automation.Condition]::TrueCondition)
+        foreach ($element in $elements) {
+            if ($element.Current.Name -like "*$expected*") {
+                Write-Host 'PASS: the installed application displays the expected SHA-256 for abc.'
+                return
+            }
+        }
+        Start-Sleep -Milliseconds 100
+    }
+    throw 'The application window did not expose the expected SHA-256 result through accessibility.'
+}
 function Read-MsiProperty([string]$Path, [string]$Name) {
     $db = $installer.OpenDatabase($Path, 0)
     $view = $db.OpenView("SELECT ``Value`` FROM ``Property`` WHERE ``Property``='$Name'")
@@ -60,7 +77,7 @@ function Assert-Installed([string]$Scope, [string]$Product) {
         Start-Sleep -Milliseconds 100
     }
     if (-not $opened) { $process.Kill(); throw 'Standalone did not create a window.' }
-    Start-Sleep -Milliseconds 500
+    Assert-DisplayedHash $process
     [void]$process.CloseMainWindow()
     if (-not $process.WaitForExit(15000)) { $process.Kill(); throw 'Standalone did not close cleanly.' }
     if ($process.ExitCode -ne 0) { throw "Standalone failed: $($process.ExitCode)" }

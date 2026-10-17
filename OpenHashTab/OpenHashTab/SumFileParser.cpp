@@ -21,7 +21,7 @@
 
 static auto k_regex_hex = ctre::match<R"(([0-9a-fA-F]{8,512}) [ \*](.++))">;
 static auto k_regex_b64 = ctre::match<R"(([0-9a-zA-Z=+\/,\-_]{6,512}) [ \*](.++))">;
-static auto k_regex_sfv = ctre::match<R"((.+) +([0-9a-fA-F]{8}))">;
+static auto k_regex_sfv = ctre::match<R"((.+?)\s++([0-9a-fA-F]{8}))">;
 
 class SumFileParser2 {
   enum class CommentStyle {

@@ -68,6 +68,7 @@ static std::vector<uint8_t> digest(const LegacyHashAlgorithm& algorithm, std::st
 }
 static void hashing() {
   check(!LegacyHashAlgorithm::ByName("SHA-1")->IsSecure(), "SHA-1 is not collision resistant");
+  check(!LegacyHashAlgorithm::ByName("RipeMD160")->IsSecure(), "RIPEMD-160 provides only 80-bit generic collision resistance");
   struct Vector { const char* name; const char* input; const char* expected; };
   const Vector vectors[] = {
     {"CRC32", "123456789", "cbf43926"},
@@ -141,6 +142,10 @@ static void parsers() {
   check(utl::UTF8ToWide("\xd0\xa4\xd0\xb0\xd0\xb9\xd0\xbb") == L"\u0424\u0430\u0439\u043b", "Unicode conversion");
   auto sfv = parse("; comment\r\nfile with spaces.bin 352441c2\r\n");
   check(sfv.size() == 1 && sfv.front().first == "file with spaces.bin", "SFV filenames with spaces");
+  for (const auto separator : {"  ", "\t", " \t "}) {
+    const auto result = parse(std::string("file with spaces.bin") + separator + "352441c2\r\n");
+    check(result.size() == 1 && result.front().first == "file with spaces.bin", "SFV whitespace separators");
+  }
   check(parse("\xef\xbb\xbf" "352441c2 *file.bin\n").size() == 1, "UTF-8 BOM");
   check(parse("NSRBwg== *file.bin\n").size() == 1, "base64 sumfile");
   check(parse("NSRBw== *file.bin\n").empty(), "malformed base64 sumfile");
@@ -240,6 +245,23 @@ static void file_hashing() {
   missing.WaitForCompletion();
   check(missing.GetFiles().front()->GetError() != ERROR_SUCCESS, "missing file reports failure");
 
+  const auto checksum_file = root / L"sample.SHA256";
+  write(root / L"sample.bin", "abc");
+  for (const bool matches : {true, false}) {
+    write(checksum_file, std::string(matches ? "ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad" :
+        "0000000000000000000000000000000000000000000000000000000000000000") + " *sample.bin\n");
+    Coordinator verify({checksum_file.wstring()});
+    verify.settings.hash_sumfile_too.SetNoSave(false);
+    verify.AddFiles();
+    verify.ProcessFiles();
+    verify.WaitForCompletion();
+    check(verify.IsSumfile() && verify.GetFiles().size() == 1, "uppercase checksum extension");
+    const auto& task = verify.GetFiles().front();
+    check(task->GetError() == ERROR_SUCCESS, "checksum target read");
+    check(task->GetMatchState() == (matches ? static_cast<int>(LegacyHashAlgorithm::ByName("SHA-256")->Idx()) :
+        FileHashTask::MatchState_Mismatch), "checksum match/mismatch classification");
+  }
+
   Coordinator cancelled({file.wstring()});
   cancelled.AddFiles();
   cancelled.Cancel(false);
@@ -274,6 +296,16 @@ static void file_hashing() {
     check(!task->GetHashResult()[LegacyHashAlgorithm::ByName("SHA-256")->Idx()].empty(), "batch completion publishes hashes");
   }
 }
+static void clipboard() {
+  auto window = CreateWindowExW(0, L"STATIC", L"OpenHashTab clipboard test", 0,
+      0, 0, 0, 0, HWND_MESSAGE, nullptr, GetModuleHandleW(nullptr), nullptr);
+  check(window != nullptr, "clipboard owner window");
+  const wchar_t input[] = {L'A', L'\u0424', L'B', L'X'};
+  check(utl::SetClipboardText(window, std::wstring_view(input, 3)) == ERROR_SUCCESS, "copy non-terminated string view");
+  check(utl::GetClipboardText(window) == L"A\u0424B", "Unicode clipboard round trip respects view length");
+  check(utl::SetClipboardText(window, {}) == ERROR_SUCCESS && utl::GetClipboardText(window).empty(), "empty clipboard text");
+  DestroyWindow(window);
+}
 int main() {
   SetErrorMode(SEM_FAILCRITICALERRORS | SEM_NOGPFAULTERRORBOX);
   try {
@@ -285,6 +317,7 @@ int main() {
     ed2k_boundaries();
     parsers();
     file_hashing();
+    clipboard();
     std::filesystem::remove_all(utl::MakePathLongCompatible(root.wstring()));
     std::puts("PASS: hashing, parsing, resource lifetime, asynchronous I/O and export tests");
     return 0;

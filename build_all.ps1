@@ -108,7 +108,9 @@ function Reset-Environment {
     # Create a new hashtable with only the variables to keep
     $resetEnvironment = @{}
     foreach ($key in $Environment.Keys) {
-        if ($varsToKeep -contains $key -or $varsToKeep -contains $key.ToUpper()) {
+        # The manual CodeQL build tracer must survive compiler-environment resets.
+        if ($varsToKeep -contains $key -or $varsToKeep -contains $key.ToUpper() -or
+            $key -like 'CODEQL_*' -or $key -like 'SEMMLE_*') {
             $resetEnvironment[$key] = $Environment[$key]
         }
     }

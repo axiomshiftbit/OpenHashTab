@@ -246,7 +246,10 @@ std::wstring utl::GetClipboardText(HWND hwnd) {
       const auto text = static_cast<LPCWSTR>(GlobalLock(hglb));
 
       if (text) {
-        wstr = text;
+        const auto capacity = GlobalSize(hglb) / sizeof(wchar_t);
+        const auto end = std::find(text, text + capacity, L'\0');
+        if (end != text + capacity)
+          wstr.assign(text, end);
         GlobalUnlock(hglb);
       }
     }
