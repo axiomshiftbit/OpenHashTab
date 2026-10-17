@@ -3,6 +3,7 @@ cmake_minimum_required(VERSION 3.14)
 project(XKCP)
 
 set(CMAKE_C_STANDARD 11)
+include(PatchSP800185.cmake)
 
 set(COMMON_FILES
         XKCP/lib/high/KangarooTwelve/KangarooTwelve.c
@@ -11,7 +12,7 @@ set(COMMON_FILES
         XKCP/lib/high/Keccak/KeccakDuplex.c
         XKCP/lib/high/Keccak/KeccakSponge.c
         XKCP/lib/high/Keccak/PRG/KeccakPRG.c
-        XKCP/lib/high/Keccak/SP800-185/SP800-185.c
+        ${SP800185_OUTPUT_DIR}/SP800-185.c
         XKCP/lib/high/Ketje/Ketjev2.c
         XKCP/lib/high/Keyak/Keyakv2.c
         XKCP/lib/high/Kravatte/Kravatte.c
@@ -206,7 +207,7 @@ add_library(${PROJECT_NAME} STATIC ${FILES})
 # ParallelHash and arbitrary streaming chunks may supply unaligned byte buffers.
 # Use XKCP's byte-wise fallback instead of casting them to uint64_t pointers.
 target_compile_definitions(${PROJECT_NAME} PRIVATE NO_MISALIGNED_ACCESSES)
-target_include_directories(${PROJECT_NAME} PUBLIC ${INCLUDES} ${CMAKE_CURRENT_SOURCE_DIR})
+target_include_directories(${PROJECT_NAME} PUBLIC ${SP800185_OUTPUT_DIR} ${INCLUDES} ${CMAKE_CURRENT_SOURCE_DIR})
 target_compile_definitions(${PROJECT_NAME} PUBLIC
         XKCP_has_Duplex_Keccak
         XKCP_has_FIPS202

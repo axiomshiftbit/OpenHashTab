@@ -179,6 +179,8 @@ static void large_hash_updates() {
     const auto algorithm = LegacyHashAlgorithm::ByName(vector.name);
     check(algorithm != nullptr, vector.name);
     check(digest(*algorithm, input, input.size()) == utl::HashStringToBytes(std::string_view(vector.expected)), vector.name);
+    if (std::string_view(vector.name).substr(0, 2) == "PH")
+      check(digest(*algorithm, input, 1024 * 1024) == utl::HashStringToBytes(std::string_view(vector.expected)), "ParallelHash total length across multiple updates");
   }
   std::puts("PASS: 512 MiB + 17 byte single updates for SHAKE and both ParallelHash variants");
 }
