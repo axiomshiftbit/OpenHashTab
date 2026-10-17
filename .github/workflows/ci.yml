@@ -9,6 +9,7 @@ on:
 
 permissions:
   contents: read
+  actions: read
 
 jobs:
   encoding:
@@ -88,3 +89,7 @@ jobs:
           if ($os.Caption -notmatch 'Windows 11' -or [int]$os.BuildNumber -lt 22000) { throw 'A Windows 11 client is required.' }
           & ./binaries/oht-arm64/Tests/CoreTests.exe
           & ./binaries/oht-arm64/Tests/EncodingTests.exe
+
+  windows11:
+    needs: build
+    uses: ./.github/workflows/windows11.yml

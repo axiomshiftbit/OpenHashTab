@@ -29,6 +29,7 @@ else ()
 endif ()
 
 add_library(AlgorithmsDlls INTERFACE)
+target_sources(AlgorithmsDlls INTERFACE "${CMAKE_CURRENT_SOURCE_DIR}/DelayLoad.cpp")
 target_include_directories(AlgorithmsDlls INTERFACE "${OHT_ALGORITHMS_INCLUDE_DIR}")
 target_link_libraries(AlgorithmsDlls INTERFACE delayimp)
 
