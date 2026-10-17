@@ -178,6 +178,7 @@ $WinSdkVer = If ($Env:WindowsTargetPlatformVersion) { $Env:WindowsTargetPlatform
 $WinSdkDir = If ($Env:WindowsSdkDir) { $Env:WindowsSdkDir } Else { $(Get-Item "hklm:\SOFTWARE\WOW6432Node\Microsoft\Microsoft SDKs\Windows").GetValue("CurrentInstallFolder") };
 
 $Cmake = Get-Command "cmake";
+$Ctest = (Get-Command "ctest").Path;
 $Dotnet = Get-Command "dotnet";
 $Ninja = (Get-Command "ninja").Path;
 $LlvmPath = (Get-Item (Get-Command "clang").Path).Directory.FullName;
@@ -299,8 +300,7 @@ $OhtVersionNumeric = "$OhtVersionMajor.$OhtVersionMinor.$OhtVersionPatch";
     }
     
     if ($_ -ne "arm64") {
-        & "$((Get-Item $BuildDir).FullName)\Tests\CoreTests.exe"
-        & "$((Get-Item $BuildDir).FullName)\Tests\EncodingTests.exe"
+        & $Ctest --test-dir $BuildDir --output-on-failure --timeout 180
     }
     $BuildDir32 = "build\oht-x86";
 

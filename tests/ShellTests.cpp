@@ -15,6 +15,7 @@ static BOOL CALLBACK add_page(HPROPSHEETPAGE page, LPARAM count) {
   return TRUE;
 }
 int wmain(int argc, wchar_t** argv) {
+  SetErrorMode(SEM_FAILCRITICALERRORS | SEM_NOGPFAULTERRORBOX);
   if (argc != 2) return 2;
   if (!ok(CoInitializeEx(nullptr, COINIT_APARTMENTTHREADED), "COM initialization")) return 1;
   CLSID clsid{};
@@ -28,10 +29,10 @@ int wmain(int argc, wchar_t** argv) {
   PIDLIST_ABSOLUTE absolute{};
   if (!ok(SHParseDisplayName(file, nullptr, &absolute, 0, nullptr), "parse shell item")) return 1;
   auto parent = ILCloneFull(absolute);
-  auto child = ILFindLastID(absolute);
+  PCUITEMID_CHILD children[] = {ILFindLastID(absolute)};
   ILRemoveLastID(parent);
   IDataObject* data{};
-  if (!ok(SHCreateDataObject(parent, 1, &child, nullptr, IID_PPV_ARGS(&data)), "shell data object")) return 1;
+  if (!ok(SHCreateDataObject(parent, 1, children, nullptr, IID_PPV_ARGS(&data)), "shell data object")) return 1;
   if (!ok(extension->Initialize(nullptr, data, nullptr), "initialize selected file")) return 1;
   IShellPropSheetExt* properties{};
   if (!ok(extension->QueryInterface(IID_PPV_ARGS(&properties)), "property sheet interface")) return 1;

@@ -143,6 +143,7 @@ static void file_hashing() {
   check(missing.GetFiles().front()->GetError() != ERROR_SUCCESS, "missing file reports failure");
 }
 int main() {
+  SetErrorMode(SEM_FAILCRITICALERRORS | SEM_NOGPFAULTERRORBOX);
   try {
     root = std::filesystem::temp_directory_path() / (L"OpenHashTabTests-" + std::to_wstring(GetCurrentProcessId()));
     std::filesystem::create_directories(root);
