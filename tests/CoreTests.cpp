@@ -12,6 +12,28 @@
 static void check(bool ok, const char* message) {
   if (!ok) throw std::runtime_error(message);
 }
+static int destroyed_contexts = 0;
+static size_t ALGORITHMS_CC test_parameters(const uint64_t*) { return 1; }
+static HashContext* ALGORITHMS_CC test_factory(void* buffer, const uint64_t*) { return static_cast<HashContext*>(buffer); }
+static void ALGORITHMS_CC test_update(HashContext*, const void*, size_t) {}
+static void ALGORITHMS_CC test_finish(HashContext*, uint8_t* out) { *out = 0; }
+static size_t ALGORITHMS_CC test_size(HashContext*) { return 1; }
+static void ALGORITHMS_CC test_destroy(HashContext*) { ++destroyed_contexts; }
+static void ownership() {
+  const HashAlgorithm algorithm(test_parameters, 16, 16, test_factory, test_update,
+      test_finish, test_size, test_destroy, "test context lifetime", false, nullptr, 0);
+  {
+    auto first = algorithm.MakeContext(nullptr);
+    auto second = algorithm.MakeContext(nullptr);
+    first = std::move(second);
+    check(destroyed_contexts == 1, "move assignment releases previous context");
+    auto& same = first;
+    first = std::move(same);
+    check(first.IsInitialized() && destroyed_contexts == 1, "self move preserves context");
+  }
+  check(destroyed_contexts == 2, "each context destroyed once");
+}
+
 static std::filesystem::path root;
 static void write(const std::filesystem::path& file, const std::string& contents) {
   std::filesystem::create_directories(file.parent_path());
@@ -88,7 +110,7 @@ static void parsers() {
   check(utl::UTF8ToWide("\xff").empty(), "invalid UTF-8 rejected");
   check(utl::UTF8ToWide("\xd0\xa4\xd0\xb0\xd0\xb9\xd0\xbb") == L"\u0424\u0430\u0439\u043b", "Unicode conversion");
   auto sfv = parse("; comment\r\nfile with spaces.bin 352441c2\r\n");
-  check(sfv.size() == 1 && sfv[0].first == "file with spaces.bin", "SFV filenames with spaces");
+  check(sfv.size() == 1 && sfv.front().first == "file with spaces.bin", "SFV filenames with spaces");
   check(parse("\xef\xbb\xbf" "352441c2 *file.bin\n").size() == 1, "UTF-8 BOM");
   check(parse("NSRBwg== *file.bin\n").size() == 1, "base64 sumfile");
   check(parse("NSRBw== *file.bin\n").empty(), "malformed base64 sumfile");
@@ -105,6 +127,13 @@ static void parsers() {
   check(utl::MakePathLongCompatible(L"\\\\server\\share\\file") == L"\\\\?\\UNC\\server\\share\\file", "long UNC prefix");
 }
 static void file_hashing() {
+  const auto tree = root / L"reparse";
+  write(tree / L"target.txt", "abc");
+  check(CreateSymbolicLinkW((tree / L"alias.txt").c_str(), (tree / L"target.txt").c_str(), 0) != FALSE, "create file symlink fixture");
+  check(CreateSymbolicLinkW((tree / L"cycle").c_str(), tree.c_str(), SYMBOLIC_LINK_FLAG_DIRECTORY) != FALSE, "create directory cycle fixture");
+  Settings tree_settings;
+  check(ProcessEverything({tree.wstring()}, &tree_settings).files.size() == 2, "include file reparse points and skip directory cycles");
+
   auto file = root / L"\u0442\u0435\u0441\u0442 with spaces.bin";
   write(file, "abc");
   Coordinator coordinator({file.wstring()});
@@ -129,6 +158,16 @@ static void file_hashing() {
   truncated.WaitForCompletion();
   check(truncated.GetFiles().front()->GetError() == ERROR_HANDLE_EOF, "short read must not produce a digest");
   for (const auto& hash : truncated.GetFiles().front()->GetHashResult()) check(hash.empty(), "failed read has no hash");
+  auto long_file = root;
+  for (int i = 0; i < 12; ++i) long_file /= L"long directory with spaces";
+  long_file /= L"unicode-\u0424.bin";
+  long_file = utl::MakePathLongCompatible(long_file.wstring());
+  write(long_file, "abc");
+  Coordinator long_path({long_file.wstring()});
+  long_path.AddFiles();
+  long_path.ProcessFiles();
+  long_path.WaitForCompletion();
+  check(long_path.GetFiles().front()->GetError() == ERROR_SUCCESS, "file path longer than MAX_PATH");
   auto empty = root / L"empty";
   write(empty, "");
   Coordinator empty_file({empty.wstring()});
@@ -147,6 +186,7 @@ int main() {
   try {
     root = std::filesystem::temp_directory_path() / (L"OpenHashTabTests-" + std::to_wstring(GetCurrentProcessId()));
     std::filesystem::create_directories(root);
+    ownership();
     hashing();
     parsers();
     file_hashing();

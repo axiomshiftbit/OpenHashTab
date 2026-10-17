@@ -2,3 +2,9 @@
 build
 install
 obj
+
+candidate/
+binaries/
+installers/
+baseline/
+msi-logs/

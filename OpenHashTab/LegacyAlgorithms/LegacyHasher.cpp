@@ -31,6 +31,7 @@ enum : uint32_t {
   AVX2_CPUID_MASK = 1u << 5,
   AVX512F_CPUID_MASK = 1u << 16,
   AVX512DQ_CPUID_MASK = 1u << 17,
+  AVX512CD_CPUID_MASK = 1u << 28,
   AVX512BW_CPUID_MASK = 1u << 30,
   AVX512VL_CPUID_MASK = 1u << 31,
 
@@ -124,7 +125,7 @@ static CPUFeatureLevel get_cpu_level() {
     return best;
 
   // /arch:AVX512 permits these instructions as well as F and VL.
-  constexpr auto required = AVX512DQ_CPUID_MASK | AVX512BW_CPUID_MASK;
+  constexpr auto required = AVX512DQ_CPUID_MASK | AVX512CD_CPUID_MASK | AVX512BW_CPUID_MASK;
   if ((abcd[1] & required) != required)
     return best;
 

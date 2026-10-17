@@ -95,7 +95,7 @@ ProcessedFileList ProcessEverything(std::list<std::wstring> list, const Settings
           const auto ext_char = utl::WideToUTF8(extension);
           for (const auto& algo : LegacyHashAlgorithm::Algorithms())
             for (auto ext = algo.GetExtensions(); *ext; ++ext)
-              if (0 == strcmp(*ext, ext_char.c_str()))
+              if (0 == _stricmp(*ext, ext_char.c_str()))
                 pfl.sumfile_type = algo.Idx();
         }
 
@@ -174,8 +174,10 @@ ProcessedFileList ProcessEverything(std::list<std::wstring> list, const Settings
             if ((0 == wcscmp(L".", find_data.cFileName)) || (0 == wcscmp(L"..", find_data.cFileName)))
               continue; // For whatever reason if you use long paths with FindFirstFile it returns "." and ".."
 
-            // TODO: figure out what to do with reparse points
-            if (find_data.dwFileAttributes & FILE_ATTRIBUTE_REPARSE_POINT)
+            // Avoid directory junction/symlink cycles, but retain file reparse
+            // points (including OneDrive placeholders) for normal file reads.
+            if ((find_data.dwFileAttributes & (FILE_ATTRIBUTE_REPARSE_POINT | FILE_ATTRIBUTE_DIRECTORY))
+                == (FILE_ATTRIBUTE_REPARSE_POINT | FILE_ATTRIBUTE_DIRECTORY))
               continue;
 
             list.push_back(normalized + L"\\" + find_data.cFileName);

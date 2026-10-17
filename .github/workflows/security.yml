@@ -1,0 +1,25 @@
+name: Dependency vulnerabilities
+
+on:
+  workflow_call:
+  workflow_dispatch:
+  schedule:
+    - cron: '23 6 * * 1'
+
+permissions:
+  contents: read
+
+jobs:
+  osv:
+    name: OSV source and build dependencies
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          submodules: recursive
+          persist-credentials: false
+      - name: Test vulnerability checking failure modes
+        run: python3 -m unittest discover -s tests -p 'test_security.py' -v
+      - name: Query OSV for pinned commits and package versions
+        run: python3 automation/Check-Vulnerabilities.py

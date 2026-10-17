@@ -70,6 +70,11 @@ function Assert-Installed([string]$Scope, [string]$Product) {
 function Assert-Removed([string]$Product) {
     if ($installer.ProductState($Product) -eq 5) { throw "Product remains installed: $Product" }
 }
+if ($Stage -ne 'AfterReboot') {
+    $wrongArch = if ($Architecture -eq 'x64') { 'ARM64' } else { 'x64' }
+    $wrongPackage = (Get-Item "$root\installers\OpenHashTab_Machine_$wrongArch.msi").FullName
+    Run-Msi "/i `"$wrongPackage`"" 'wrong-architecture-rejected' @(1603, 1633)
+}
 foreach ($scope in @('Machine', 'User')) {
     $package = (Get-Item "$root\installers\OpenHashTab_${scope}_${Architecture}.msi").FullName
     $product = Read-MsiProperty $package 'ProductCode'

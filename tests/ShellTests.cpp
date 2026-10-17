@@ -6,7 +6,7 @@
 #include <string>
 
 static bool ok(HRESULT result, const char* operation) {
-  if (FAILED(result)) std::fprintf(stderr, "FAIL: %s (0x%08lx)\n", operation, result);
+  if (FAILED(result)) std::fprintf(stderr, "FAIL: %s (0x%08lx)\n", operation, static_cast<unsigned long>(result));
   return SUCCEEDED(result);
 }
 static BOOL CALLBACK add_page(HPROPSHEETPAGE page, LPARAM count) {
