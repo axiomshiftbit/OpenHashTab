@@ -317,19 +317,23 @@ static void file_hashing() {
 
   const auto checksum_file = root / L"sample.SHA256";
   write(root / L"sample.bin", "abc");
-  for (const bool matches : {true, false}) {
-    write(checksum_file, std::string(matches ? "ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad" :
-        "0000000000000000000000000000000000000000000000000000000000000000") + " *sample.bin\n");
-    Coordinator verify({checksum_file.wstring()});
-    verify.settings.hash_sumfile_too.SetNoSave(false);
-    verify.AddFiles();
-    verify.ProcessFiles();
-    verify.WaitForCompletion();
-    check(verify.IsSumfile() && verify.GetFiles().size() == 1, "uppercase checksum extension");
-    const auto& task = verify.GetFiles().front();
-    check(task->GetError() == ERROR_SUCCESS, "checksum target read");
-    check(task->GetMatchState() == (matches ? static_cast<int>(LegacyHashAlgorithm::ByName("SHA-256")->Idx()) :
-        FileHashTask::MatchState_Mismatch), "checksum match/mismatch classification");
+  const auto absolute_target = std::filesystem::absolute(root / L"sample.bin");
+  for (const auto& target : {std::wstring(L"sample.bin"), absolute_target.wstring(),
+                            std::wstring(L"\\") + absolute_target.relative_path().wstring()}) {
+    for (const bool matches : {true, false}) {
+      write(checksum_file, std::string(matches ? "ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad" :
+          "0000000000000000000000000000000000000000000000000000000000000000") + " *" + utl::WideToUTF8(target.c_str()) + "\n");
+      Coordinator verify({checksum_file.wstring()});
+      verify.settings.hash_sumfile_too.SetNoSave(false);
+      verify.AddFiles();
+      verify.ProcessFiles();
+      verify.WaitForCompletion();
+      check(verify.IsSumfile() && verify.GetFiles().size() == 1, "uppercase checksum extension");
+      const auto& task = verify.GetFiles().front();
+      check(task->GetError() == ERROR_SUCCESS, "checksum target read");
+      check(task->GetMatchState() == (matches ? static_cast<int>(LegacyHashAlgorithm::ByName("SHA-256")->Idx()) :
+          FileHashTask::MatchState_Mismatch), "checksum match/mismatch classification");
+    }
   }
 
   Coordinator cancelled({file.wstring()});

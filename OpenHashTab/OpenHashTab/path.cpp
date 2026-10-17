@@ -18,6 +18,7 @@
 #include "Settings.h"
 #include "SumFileParser.h"
 #include "utl.h"
+#include <filesystem>
 
 // This function will normalize and un-shorten a path.
 // Unfortunately unshortening a path with GetLongPathNameW requires that all directories in the way exist. This might
@@ -104,7 +105,8 @@ ProcessedFileList ProcessEverything(std::list<std::wstring> list, const Settings
           if (filesum.first.empty())
             continue;
 
-          const auto path = sumfile_base_path + utl::UTF8ToWide(filesum.first.c_str());
+          const auto path = (std::filesystem::path{sumfile_base_path}
+                             / utl::UTF8ToWide(filesum.first.c_str())).wstring();
 
           // absolutize paths we found in the sumfile
           fsl_absolute.emplace_back(path, std::move(filesum.second));
