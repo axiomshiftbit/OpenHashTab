@@ -1,6 +1,6 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 set(APP "${CMAKE_CURRENT_SOURCE_DIR}/../OpenHashTab")
-add_executable(CoreTests ../../tests/CoreTests.cpp
+add_executable(CoreTests ../../tests/CoreTests.cpp ../../tests/DialogTemplates.rc
     ${APP}/base64.cpp ${APP}/utl.cpp ${APP}/SumFileParser.cpp ${APP}/path.cpp
     ${APP}/Settings.cpp ${APP}/Coordinator.cpp ${APP}/FileHashTask.cpp
     ${APP}/Queues.cpp ${APP}/Exporter.cpp)

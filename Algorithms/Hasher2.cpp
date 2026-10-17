@@ -537,6 +537,20 @@ public:
   }
 };
 
+// XKCP's BitLength is size_t. In a 32-bit build a single byte buffer of
+// 512 MiB or more must be split before converting its length to bits.
+template <class Context, class Update>
+static void update_in_bits(Context* ctx, const void* data, size_t size, Update update)
+{
+  auto bytes = static_cast<const unsigned char*>(data);
+  while (size) {
+    const auto count = std::min(size, std::numeric_limits<BitLength>::max() / 8);
+    update(ctx, bytes, count * 8);
+    bytes += count;
+    size -= count;
+  }
+}
+
 class KeccakHashContext final : public HashContext
 {
   Keccak_HashInstance ctx{};
@@ -578,7 +592,7 @@ public:
 
   void Update(const void* data, size_t size)
   {
-    Keccak_HashUpdate(&ctx, (const BitSequence*)data, size * 8);
+    update_in_bits(&ctx, data, size, Keccak_HashUpdate);
   }
 
   void Finish(uint8_t* out)
@@ -656,7 +670,7 @@ public:
 
   void Update(const void* data, size_t size)
   {
-    ParallelHash128_Update(&ctx, (const unsigned char*)data, size * 8);
+    update_in_bits(&ctx, data, size, ParallelHash128_Update);
   }
 
   void Finish(uint8_t* out)
@@ -696,7 +710,7 @@ public:
 
   void Update(const void* data, size_t size)
   {
-    ParallelHash256_Update(&ctx, (const unsigned char*)data, size * 8);
+    update_in_bits(&ctx, data, size, ParallelHash256_Update);
   }
 
   void Finish(uint8_t* out)

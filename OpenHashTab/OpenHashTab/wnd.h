@@ -15,6 +15,7 @@
 //    along with OpenHashTab.  If not, see <https://www.gnu.org/licenses/>.
 #pragma once
 #include "utl.h"
+#include <cstddef>
 
 namespace wnd {
   // apparently you can get random WM_USER messages from malfunctioning other apps
@@ -286,42 +287,40 @@ namespace wnd {
       //WCHAR     typeface[stringLen];
     } DLGTEMPLATEEX;
 
-    HWND hwnd = nullptr;
     const auto hRsrc = FindResourceExW(hInstance, RT_DIALOG, lpTemplateName, 0);
-    if (hRsrc) {
-      const auto hGlobal = LoadResource(hInstance, hRsrc);
-      if (hGlobal) {
-        const auto pOrigTemplate = static_cast<const DLGTEMPLATEEX*>(LockResource(hGlobal));
-        if (pOrigTemplate) {
-          const auto dwSize = SizeofResource(hInstance, hRsrc);
-          if (dwSize) {
-            const auto pTemplate = static_cast<DLGTEMPLATE*>(malloc(dwSize));
-            const auto pTemplateEx = reinterpret_cast<DLGTEMPLATEEX*>(pTemplate);
-            if (pTemplateEx) {
-              memcpy(pTemplateEx, pOrigTemplate, dwSize);
-
-              PDWORD pStyle, pexStyle;
-
-              if (pTemplateEx->signature == 0xFFFF) {
-                pStyle = &pTemplateEx->style;
-                pexStyle = &pTemplateEx->exStyle;
-              } else {
-                pStyle = &pTemplate->style;
-                pexStyle = &pTemplate->dwExtendedStyle;
-              }
-
-              *pStyle = WS_POPUPWINDOW | WS_CAPTION | WS_THICKFRAME | DS_SHELLFONT;
-              *pexStyle = WS_EX_OVERLAPPEDWINDOW | WS_EX_APPWINDOW;
-
-              hwnd = CreateDialogIndirectParamW(hInstance, pTemplate, hWndParent, lpDialogFunc, dwInitParam);
-
-              free(pTemplateEx);
-            }
-          }
-        }
-        FreeResource(hGlobal);
-      }
+    if (!hRsrc) return nullptr;
+    const auto hGlobal = LoadResource(hInstance, hRsrc);
+    if (!hGlobal) return nullptr;
+    const auto source = static_cast<const BYTE*>(LockResource(hGlobal));
+    if (!source) return nullptr;
+    const auto size = SizeofResource(hInstance, hRsrc);
+    if (size < 2 * sizeof(WORD)) {
+      SetLastError(ERROR_INVALID_DATA);
+      return nullptr;
     }
+    WORD signature;
+    memcpy(&signature, source + sizeof(WORD), sizeof(signature));
+    const bool extended = signature == 0xFFFF;
+    const auto minimum = extended ? offsetof(DLGTEMPLATEEX, cy) + sizeof(short) : sizeof(DLGTEMPLATE);
+    if (size < minimum) {
+      SetLastError(ERROR_INVALID_DATA);
+      return nullptr;
+    }
+    const auto buffer = static_cast<BYTE*>(malloc(size));
+    if (!buffer) {
+      SetLastError(ERROR_NOT_ENOUGH_MEMORY);
+      return nullptr;
+    }
+    memcpy(buffer, source, size);
+    const DWORD style = WS_POPUPWINDOW | WS_CAPTION | WS_THICKFRAME | DS_SHELLFONT;
+    const DWORD exStyle = WS_EX_OVERLAPPEDWINDOW | WS_EX_APPWINDOW;
+    memcpy(buffer + (extended ? offsetof(DLGTEMPLATEEX, style) : offsetof(DLGTEMPLATE, style)), &style, sizeof(style));
+    memcpy(buffer + (extended ? offsetof(DLGTEMPLATEEX, exStyle) : offsetof(DLGTEMPLATE, dwExtendedStyle)), &exStyle, sizeof(exStyle));
+    // The Win32 API accepts either serialized format through LPCDLGTEMPLATE.
+    const auto hwnd = CreateDialogIndirectParamW(hInstance, reinterpret_cast<LPCDLGTEMPLATE>(buffer), hWndParent, lpDialogFunc, dwInitParam);
+    const auto error = GetLastError();
+    free(buffer);
+    if (!hwnd) SetLastError(error);
     return hwnd;
   }
 

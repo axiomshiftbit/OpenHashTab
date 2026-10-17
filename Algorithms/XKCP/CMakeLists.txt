@@ -203,6 +203,9 @@ endif ()
 
 add_library(${PROJECT_NAME} STATIC ${FILES})
 
+# ParallelHash and arbitrary streaming chunks may supply unaligned byte buffers.
+# Use XKCP's byte-wise fallback instead of casting them to uint64_t pointers.
+target_compile_definitions(${PROJECT_NAME} PRIVATE NO_MISALIGNED_ACCESSES)
 target_include_directories(${PROJECT_NAME} PUBLIC ${INCLUDES} ${CMAKE_CURRENT_SOURCE_DIR})
 target_compile_definitions(${PROJECT_NAME} PUBLIC
         XKCP_has_Duplex_Keccak

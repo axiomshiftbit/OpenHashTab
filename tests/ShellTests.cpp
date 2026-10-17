@@ -4,6 +4,7 @@
 #include <ShlObj.h>
 #include <cstdio>
 #include <string>
+#include <cstring>
 
 static bool ok(HRESULT result, const char* operation) {
   if (FAILED(result)) std::fprintf(stderr, "FAIL: %s (0x%08lx)\n", operation, static_cast<unsigned long>(result));
@@ -43,6 +44,16 @@ int wmain(int argc, wchar_t** argv) {
   auto menu = CreatePopupMenu();
   const auto result = context->QueryContextMenu(menu, 0, 1, 100, CMF_NORMAL);
   if (!ok(result, "context menu") || GetMenuItemCount(menu) != 1) return 1;
+  char help[128 * sizeof(wchar_t)]{};
+  if (!ok(context->GetCommandString(0, GCS_HELPTEXTW, nullptr, help, 128), "Unicode context menu help")) return 1;
+  wchar_t unicode[128]{};
+  std::memcpy(unicode, help, sizeof(unicode));
+  if (std::wstring(unicode) != L"Calculate and verify file hashes.") return 1;
+  std::memset(help, 0x5a, sizeof(help));
+  if (context->GetCommandString(0, GCS_HELPTEXTW, nullptr, help, 1) != HRESULT_FROM_WIN32(ERROR_INSUFFICIENT_BUFFER)) return 1;
+  for (const auto byte : help) if (byte != 0x5a) return 1;
+  if (context->GetCommandString(0, GCS_HELPTEXTW, nullptr, nullptr, 0) != E_INVALIDARG) return 1;
+  if (context->GetCommandString(1, GCS_HELPTEXTW, nullptr, help, 128) != E_INVALIDARG) return 1;
   // Verify that COM loaded the registration requested by the installer test.
   if (!GetModuleHandleW(argv[1])) { std::fprintf(stderr, "FAIL: unexpected COM DLL\n"); return 1; }
   DestroyMenu(menu);

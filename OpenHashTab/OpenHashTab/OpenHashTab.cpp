@@ -305,7 +305,12 @@ HRESULT COpenHashTabShlExt::GetCommandString(
     return E_INVALIDARG;
 
   if (uType == GCS_HELPTEXTW) {
-    wcscpy_s((LPWSTR)pszName, cchMax, L"Is this even displayed anywhere??");
+    // IContextMenu declares CHAR* even for GCS_HELPTEXTW. cchMax counts
+    // wchar_t characters in this mode; copy the Unicode representation as bytes.
+    static constexpr wchar_t help[] = L"Calculate and verify file hashes.";
+    if (!pszName) return E_INVALIDARG;
+    if (cchMax < std::size(help)) return HRESULT_FROM_WIN32(ERROR_INSUFFICIENT_BUFFER);
+    memcpy(pszName, help, sizeof(help));
     return S_OK;
   }
 

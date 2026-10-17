@@ -37,24 +37,7 @@ jobs:
           category: /language:actions
           output: ${{ runner.temp }}/codeql-actions
       - name: Reject workflow security findings
-        run: |
-          python3 - <<'PY'
-          import json
-          import os
-          from pathlib import Path
-          files = list((Path(os.environ['RUNNER_TEMP']) / 'codeql-actions').glob('*.sarif'))
-          if not files:
-              raise SystemExit('CodeQL did not produce a workflow analysis result.')
-          findings = 0
-          for path in files:
-              for run in json.loads(path.read_text())['runs']:
-                  for result in run.get('results', []):
-                      print(f"{result['ruleId']}: {result['message']['text']}")
-                      if result.get('level', 'warning') in ('warning', 'error'):
-                          findings += 1
-          if findings:
-              raise SystemExit(f'{findings} workflow findings require review and correction.')
-          PY
+        run: python3 automation/Check-CodeQL.py "$RUNNER_TEMP/codeql-actions"
 
   encoding:
     name: Encoding sanitizers
@@ -68,6 +51,8 @@ jobs:
         run: |
           g++ -std=c++20 -g -fsanitize=address,undefined -I OpenHashTab/OpenHashTab tests/EncodingTests.cpp OpenHashTab/OpenHashTab/base64.cpp -o "$RUNNER_TEMP/encoding-tests"
           "$RUNNER_TEMP/encoding-tests"
+      - name: Test the CodeQL result gate
+        run: python3 -m unittest discover -s tests -p test_codeql.py -v
       - name: Verify independent algorithm vectors
         run: python3 tests/GenerateHashVectors.py --check
 
@@ -114,25 +99,9 @@ jobs:
         with:
           category: /language:c-cpp
           output: ${{ runner.temp }}/codeql-results
-      - name: Reject high and critical CodeQL findings
+      - name: Reject CodeQL findings
         shell: pwsh
-        run: |
-          $ErrorActionPreference = 'Stop'
-          $findings = 0
-          $files = @(Get-ChildItem "$env:RUNNER_TEMP/codeql-results/*.sarif")
-          if ($files.Count -eq 0) { throw 'CodeQL did not produce an analysis result.' }
-          foreach ($file in $files) {
-            $sarif = Get-Content $file -Raw | ConvertFrom-Json
-            foreach ($run in $sarif.runs) {
-              foreach ($result in $run.results) {
-                $rule = $run.tool.driver.rules[$result.ruleIndex]
-                $severity = [double]$rule.properties.'security-severity'
-                Write-Host "$($result.ruleId): severity $severity; $($result.message.text)"
-                if ($severity -ge 7) { ++$findings }
-              }
-            }
-          }
-          if ($findings) { throw "$findings high/critical CodeQL findings require review and correction." }
+        run: python automation/Check-CodeQL.py "$env:RUNNER_TEMP/codeql-results"
       - name: Check restored NuGet packages and source dependencies
         run: python automation/Check-Vulnerabilities.py --assets
       - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1

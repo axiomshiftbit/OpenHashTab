@@ -5,6 +5,7 @@
 #include "Exporter.h"
 #include "utl.h"
 #include "json.h"
+#include "wnd.h"
 #include <filesystem>
 #include <fstream>
 #include <cstdio>
@@ -163,6 +164,23 @@ static void streaming_hash_vectors() {
       check(digest(*algorithm, input, chunk) == expected, vector.name);
   }
   std::printf("PASS: %zu published xxHash, BLAKE2sp, BLAKE3 and K12 vectors, three streaming patterns each\n", std::size(streaming_vectors));
+}
+static void large_hash_updates() {
+  // One 512 MiB + 17 byte update overflowed size_t * 8 in x86 builds.
+  // Independent hashlib/cSHAKE reference values are described in HashVectors.md.
+  const std::string input((size_t(1) << 29) + 17, '\0');
+  struct Vector { const char* name; const char* expected; };
+  const Vector vectors[] = {
+    {"SHAKE128-256", "3d68417459a8be08c7e49618c3fe61832f8ca388aee32360eab2975917c368fa"},
+    {"PH128-264", "d3ed977f66fa8bfc05819e19c862376eb26165bee7cef8aaf8edf27d53c69b3cbb"},
+    {"PH256-528", "7be21c8d2a9e804a6fc8893db8a3443f085a06c07186783e244dfba98cbf7237193fdc68e24eaa3489838a8ad4db1589ec37821499bb3143ea4bd082aaabc1a2059b"}
+  };
+  for (const auto& vector : vectors) {
+    const auto algorithm = LegacyHashAlgorithm::ByName(vector.name);
+    check(algorithm != nullptr, vector.name);
+    check(digest(*algorithm, input, input.size()) == utl::HashStringToBytes(std::string_view(vector.expected)), vector.name);
+  }
+  std::puts("PASS: 512 MiB + 17 byte single updates for SHAKE and both ParallelHash variants");
 }
 static void parsers() {
   const std::string filename = "folder\\file\"\n\t.bin";
@@ -337,6 +355,25 @@ static void file_hashing() {
     check(!task->GetHashResult()[LegacyHashAlgorithm::ByName("SHA-256")->Idx()].empty(), "batch completion publishes hashes");
   }
 }
+static INT_PTR CALLBACK empty_dialog(HWND, UINT, WPARAM, LPARAM) { return FALSE; }
+static void dialog_templates() {
+  for (const int resource : {101, 102}) {
+    const auto dialog = wnd::CreateDialogFromChildDialogResourceParam(
+        GetModuleHandleW(nullptr), MAKEINTRESOURCEW(resource), nullptr, empty_dialog, 0);
+    check(dialog != nullptr, "create standard and extended dialog templates");
+    const auto style = GetWindowLongPtrW(dialog, GWL_STYLE);
+    check((style & WS_CHILD) == 0 && (style & WS_POPUP) != 0, "dialog style conversion");
+    check((GetWindowLongPtrW(dialog, GWL_EXSTYLE) & WS_EX_APPWINDOW) != 0, "dialog extended style conversion");
+    check(DestroyWindow(dialog) != FALSE, "destroy test dialog");
+  }
+  for (const int resource : {103, 104}) {
+    SetLastError(ERROR_SUCCESS);
+    const auto dialog = wnd::CreateDialogFromChildDialogResourceParam(
+        GetModuleHandleW(nullptr), MAKEINTRESOURCEW(resource), nullptr, empty_dialog, 0);
+    check(dialog == nullptr && GetLastError() == ERROR_INVALID_DATA, "truncated dialog template rejected");
+  }
+  std::puts("PASS: standard, extended and truncated dialog templates");
+}
 static void clipboard() {
   auto window = CreateWindowExW(0, L"STATIC", L"OpenHashTab clipboard test", 0,
       0, 0, 0, 0, HWND_MESSAGE, nullptr, GetModuleHandleW(nullptr), nullptr);
@@ -356,9 +393,11 @@ int main() {
     hashing();
     official_hash_vectors();
     streaming_hash_vectors();
+    large_hash_updates();
     ed2k_boundaries();
     parsers();
     file_hashing();
+    dialog_templates();
     clipboard();
     std::filesystem::remove_all(utl::MakePathLongCompatible(root.wstring()));
     std::puts("PASS: hashing, parsing, resource lifetime, asynchronous I/O and export tests");
