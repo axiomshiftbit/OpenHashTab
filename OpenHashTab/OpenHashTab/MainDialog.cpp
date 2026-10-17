@@ -205,7 +205,7 @@ void MainDialog::ListPopupMenu(POINT pt) {
   LVHITTESTINFO lvhtinfo = {pt};
   const auto item = ListView_HitTest(list, &lvhtinfo);
 
-  MapWindowPoints(list, HWND_DESKTOP, &pt, 2);
+  MapWindowPoints(list, HWND_DESKTOP, &pt, 1);
   const auto menu = CreatePopupMenu();
 
 #define CTLSTR(name) IDM_##name, utl::GetString(IDS_##name).c_str()
