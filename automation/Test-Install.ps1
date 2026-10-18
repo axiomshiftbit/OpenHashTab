@@ -65,7 +65,12 @@ function Assert-Installed([string]$Scope, [string]$Product) {
     if (-not (Test-Path $dll)) { throw "Registered DLL missing: $dll" }
     if ((Get-Item $dll).VersionInfo.FileVersion -notlike "$version*") { throw 'Installed binary version differs from VERSION.' }
     $directory = Split-Path $dll
-    Copy-Item "$root\binaries\oht-$Architecture\Tests\ShellTests.exe" "$logDirectory\ShellTests.exe" -Force
+    $shellSource = "$root\binaries\oht-$Architecture\Tests\ShellTests.exe"
+    $shellTarget = "$logDirectory\ShellTests.exe"
+    if (-not (Test-Path $shellTarget)) { Copy-Item $shellSource $shellTarget }
+    if ((Get-FileHash $shellSource).Hash -ne (Get-FileHash $shellTarget).Hash) {
+        throw 'Shell test copy differs from the verified original.'
+    }
     & "$logDirectory\ShellTests.exe" "$dll" | Write-Host
     if ($LASTEXITCODE -ne 0) { throw 'Registered shell extension tests failed.' }
     $sample = Join-Path $logDirectory 'sample with spaces.txt'
