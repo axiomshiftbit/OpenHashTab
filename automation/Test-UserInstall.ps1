@@ -58,6 +58,9 @@ try {
     $process = Start-Process $shell -Credential $credential -LoadUserProfile -UseNewEnvironment:$newEnvironment -WorkingDirectory $work -PassThru `
         -ArgumentList "-NoProfile -ExecutionPolicy Bypass -File `"$work\Run.ps1`" -Architecture $Architecture" `
         -RedirectStandardOutput "$work\stdout.log" -RedirectStandardError "$work\stderr.log"
+    # Retain the handle before waiting: Windows PowerShell can otherwise lose
+    # ExitCode for a redirected process (PowerShell/PowerShell#20400).
+    $null = $process.Handle
     if (-not $process.WaitForExit(600000)) {
         & taskkill.exe /PID $process.Id /T /F | Write-Host
         throw 'Standard-user installer tests timed out.'
@@ -65,6 +68,7 @@ try {
     if ($process.ExitCode -ne 0) { throw "Standard-user installer tests failed: $($process.ExitCode)" }
     Write-Host 'PASS: install, upgrade, repair, COM, GUI and uninstall without administrator privileges.'
 } finally {
+    if ($process) { $process.Dispose() }
     $desktopError = $null
     try { if ($desktop) { $desktop.Dispose() } } catch { $desktopError = $_ }
     foreach ($file in @('stdout.log', 'stderr.log')) {
