@@ -3,6 +3,7 @@
 import hashlib
 import io
 import json
+import os
 import pathlib
 import subprocess
 import tarfile
@@ -26,6 +27,10 @@ metadata = {
     "status": "unsigned release candidate",
     "installers": {p.name: hashlib.sha256(p.read_bytes()).hexdigest() for p in installers},
 }
+if os.environ.get("BUILD_RUN"):
+    metadata["build_run"] = int(os.environ["BUILD_RUN"])
+    metadata["build_commit"] = os.environ["BUILD_COMMIT"]
+    metadata["validation_run"] = int(os.environ["GITHUB_RUN_ID"])
 with zipfile.ZipFile(output / f"OpenHashTab-{version}-Windows11-candidate.zip", "w", zipfile.ZIP_DEFLATED) as archive:
     for path in installers:
         archive.write(path, path.name)

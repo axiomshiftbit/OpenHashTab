@@ -93,6 +93,27 @@ static int windows_control() {
   DWORD zone{};
   // A local file URL performs zone classification without a network request.
   if (!ok(security->MapUrlToZone(L"file:///C:/Windows/explorer.exe", &zone, 0), "control local file zone")) return 1;
+  // A real visible Windows window exercises GUI lifecycle side effects such as
+  // BAM and notifications; the control still loads no OpenHashTab component.
+  INITCOMMONCONTROLSEX common{sizeof(common), ICC_LISTVIEW_CLASSES};
+  if (!InitCommonControlsEx(&common)) return 1;
+  auto window = CreateWindowExW(WS_EX_APPWINDOW, L"STATIC", L"Windows shell control",
+      WS_OVERLAPPEDWINDOW, CW_USEDEFAULT, CW_USEDEFAULT, 320, 200, nullptr, nullptr, nullptr, nullptr);
+  if (!window) return 1;
+  auto list = CreateWindowExW(0, WC_LISTVIEWW, L"", WS_CHILD | WS_VISIBLE | LVS_REPORT,
+      0, 0, 300, 150, window, nullptr, nullptr, nullptr);
+  if (!list) return 1;
+  ShowWindow(window, SW_SHOWNORMAL);
+  UpdateWindow(window);
+  for (unsigned attempt = 0; attempt < 50; ++attempt) {
+    MSG message{};
+    while (PeekMessageW(&message, nullptr, 0, 0, PM_REMOVE)) {
+      TranslateMessage(&message);
+      DispatchMessageW(&message);
+    }
+    Sleep(20);
+  }
+  DestroyWindow(window);
   security->Release(); data->Release();
   CoTaskMemFree(absolute); CoTaskMemFree(parent);
   CoUninitialize();

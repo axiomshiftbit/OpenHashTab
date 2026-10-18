@@ -46,7 +46,9 @@ if ($Stage -eq 'Start') {
     # Run a renamed test executable before any project DLL is installed. Its
     # separate mode only calls Windows APIs; freeze these events before the tests.
     $control = Join-Path $directory 'WindowsShellControl.exe'
-    Copy-Item "$root\binaries\oht-x64\Tests\ShellTests.exe" $control
+    $controlSource = "$root\binaries\control\WindowsShellControl.exe"
+    if (-not (Test-Path $controlSource)) { $controlSource = "$root\binaries\oht-x64\Tests\ShellTests.exe" }
+    Copy-Item $controlSource $control
     & $control --windows-control
     if ($LASTEXITCODE -ne 0) { throw 'Windows-only shell control failed.' }
     Start-Sleep -Seconds 5
@@ -55,7 +57,17 @@ if ($Stage -eq 'Start') {
         $data.Image -like '*\WindowsShellControl.exe' -or $data.SourceImage -like '*\WindowsShellControl.exe' -or
             $data.ParentImage -like '*\WindowsShellControl.exe'
     } | ForEach-Object { [pscustomobject]@{ Id=$_.Id; Xml=$_.ToXml() } })
-    ConvertTo-Json -InputObject $controlEvents -Depth 4 | Set-Content "$directory\control-events.json" -Encoding utf8
+    $controlEvents | ForEach-Object { ConvertTo-Json -InputObject $_ -Depth 3 -Compress } |
+        Set-Content "$directory\control-events.jsonl" -Encoding utf8
+    # Check the actual persisted format now, before an expensive lifecycle/reboot.
+    $restored = @(Read-BehaviorSnapshot "$directory\control-events.jsonl")
+    if ($restored.Count -ne $controlEvents.Count) { throw 'Control snapshot lost events.' }
+    $null = Get-WindowsControlSignatures $restored
+    $controlRegistry = @($restored | Where-Object Id -in @(12,13,14) | ForEach-Object {
+        $data = Get-BehaviorEventData $_
+        [pscustomobject]@{ Id=$_.Id; Image=$data.Image; Target=$data.TargetObject; Type=$data.EventType; Details=$data.Details }
+    })
+    Write-Host "Frozen control registry: $(ConvertTo-Json -InputObject $controlRegistry -Compress)"
     Write-Host "Captured $($controlEvents.Count) events from the Windows-only control."
 
     Update-MpSignature
@@ -88,7 +100,7 @@ if ($Stage -eq 'Start') {
 
 Start-Sleep -Seconds 5
 $events = @(Get-WinEvent -FilterHashtable @{LogName=$log; Id=1,3,7,8,9,11,12,13,14,22})
-$controls = @(Get-Content "$directory\control-events.json" -Raw | ConvertFrom-Json)
+$controls = @(Read-BehaviorSnapshot "$directory\control-events.jsonl")
 # Preserve reviewed registry operations and values in test output even if the
 # admission check rejects one. Binary payload bytes are not exposed by Sysmon.
 $registry = @(@($controls) + $events | Where-Object Id -in @(12,13,14) | ForEach-Object {

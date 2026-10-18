@@ -1,4 +1,13 @@
 # Validate captured Sysmon events separately from collection and VM setup.
+function Read-BehaviorSnapshot([string]$Path) {
+    # One object per line avoids Windows PowerShell 5.1's non-enumerating JSON arrays.
+    Get-Content -LiteralPath $Path | ForEach-Object {
+        $event = ConvertFrom-Json -InputObject $_
+        if ($event.Xml -isnot [string] -or -not $event.Xml -or ($event.Id -isnot [int] -and $event.Id -isnot [long])) { throw 'Invalid control snapshot event.' }
+        $event
+    }
+}
+
 function Get-BehaviorEventData($Event) {
     [xml]$xml = if ($Event.PSObject.Properties['Xml']) { $Event.Xml } else { $Event.ToXml() }
     $data = @{}
@@ -19,7 +28,8 @@ function Get-WindowsRegistrySignature([int]$Kind, [hashtable]$Data) {
         $target = 'BAM:' + $volume + ':own-image'
     } elseif ($Data.Image -match '\\(ShellTests|WindowsShellControl)\.exe$' -and
         $Kind -eq 13 -and $Data.EventType -eq 'SetValue' -and
-        $target -eq 'HKLM\SOFTWARE\Microsoft\Windows NT\CurrentVersion\Notifications\Data\418A073AA3BC1C75') {
+        $target -in @('HKLM\SOFTWARE\Microsoft\Windows NT\CurrentVersion\Notifications\Data\418A073AA3BC1C75',
+            'HKLM\SOFTWARE\Microsoft\Windows NT\CurrentVersion\Notifications\Data\418A073AA3BC2475')) {
         # Windows notification state is accepted only if the control wrote this exact value.
     } elseif ($Data.Image -match '\\(ShellTests|WindowsShellControl)\.exe$' -and
         $target -match "^HKU\\$sid\\Software\\Microsoft\\Windows\\CurrentVersion\\Internet Settings\\ZoneMap(?<value>\\(?:AutoDetect|UNCAsIntranet|IntranetName|ProxyBypass))?$") {
@@ -33,13 +43,11 @@ function Get-WindowsRegistrySignature([int]$Kind, [hashtable]$Data) {
     return "$Kind|$($Data.EventType)|$target|$($Data.Details)"
 }
 
-function Get-VerifiedBehaviorCounts {
-    param([object[]]$Events, [object[]]$ControlEvents)
-    $images = '\\(CoreTests|EncodingTests|ShellTests|StandaloneStub)\.exe$'
+function Get-WindowsControlSignatures([object[]]$Events) {
     $controls = @{}
     $controlStarted = $false
     $controlLoaded = $false
-    foreach ($event in $ControlEvents) {
+    foreach ($event in $Events) {
         $data = Get-BehaviorEventData $event
         if ($data.Image -notmatch '\\WindowsShellControl\.exe$') { throw 'Unexpected control process.' }
         if ($event.Id -eq 1) { $controlStarted = $true }
@@ -52,6 +60,13 @@ function Get-VerifiedBehaviorCounts {
         if ($signature) { $controls[$signature] = $true }
     }
     if (-not $controlStarted -or -not $controlLoaded) { throw 'Missing Windows-only control telemetry.' }
+    return $controls
+}
+
+function Get-VerifiedBehaviorCounts {
+    param([object[]]$Events, [object[]]$ControlEvents)
+    $images = '\\(CoreTests|EncodingTests|ShellTests|StandaloneStub)\.exe$'
+    $controls = Get-WindowsControlSignatures $ControlEvents
     $ownRegistry = '^HK(U\\S-1-5-21-\d+-\d+-\d+-\d+|CU|LM)\\Software\\OpenHashTab(?:\\|$)'
     $counts = @{}
     $processes = @{}

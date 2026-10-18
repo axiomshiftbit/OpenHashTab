@@ -47,6 +47,7 @@ $cases += @{Events=@($baseline) + (New-BehaviorEvent 11 @{Image='C:\Test\CoreTes
 $registryData = @(
     @{EventType='SetValue'; TargetObject='HKLM\System\CurrentControlSet\Services\bam\State\UserSettings\S-1-5-21-1-2-3-1000\\Device\HarddiskVolume3\Test\ShellTests.exe'; Details='Binary Data'}
     @{EventType='SetValue'; TargetObject='HKLM\SOFTWARE\Microsoft\Windows NT\CurrentVersion\Notifications\Data\418A073AA3BC1C75'; Details='Binary Data'}
+    @{EventType='SetValue'; TargetObject='HKLM\SOFTWARE\Microsoft\Windows NT\CurrentVersion\Notifications\Data\418A073AA3BC2475'; Details='Binary Data'}
     @{EventType='CreateKey'; TargetObject='HKU\S-1-5-21-1-2-3-1000\Software\Microsoft\Windows\CurrentVersion\Internet Settings\ZoneMap'; Details=''}
     foreach ($name in @('AutoDetect','UNCAsIntranet','IntranetName','ProxyBypass')) {
         @{EventType='SetValue'; TargetObject="HKU\S-1-5-21-1-2-3-1000\Software\Microsoft\Windows\CurrentVersion\Internet Settings\ZoneMap\$name"; Details='DWORD (0x00000001)'}
@@ -87,6 +88,21 @@ foreach ($data in @(
     $cases += @{Events=@($baseline) + (New-BehaviorEvent 13 $data); Control=$allControls; Error='Unexpected application behavior detected.'}
 }
 $cases += @{Events=@($baseline) + (New-BehaviorEvent 14 @{Image='C:\Test\CoreTests.exe'; TargetObject='HKCU\Software\OpenHashTab\Setting'; NewName='HKCU\Software\Microsoft\Windows\CurrentVersion\Run\Bad'}); Error='Unexpected application behavior detected.'}
+# Round-trip the on-disk JSONL format used across a VM reboot, including PS 5.1.
+$snapshot = [IO.Path]::GetTempFileName()
+try {
+    $control | Select-Object Id,Xml | ForEach-Object { ConvertTo-Json -InputObject $_ -Compress } |
+        Set-Content $snapshot -Encoding utf8
+    $restored = @(Read-BehaviorSnapshot $snapshot)
+    if ($restored.Count -ne $control.Count) { throw 'Persisted snapshot changed its event count.' }
+    $cases += @{Events=$baseline; Control=$restored; Error=''}
+    foreach ($invalid in @('{"Id":1}', '{"Id":"1","Xml":"x"}', '[{"Id":1,"Xml":"x"},{"Id":7,"Xml":"x"}]')) {
+        Set-Content $snapshot $invalid -Encoding utf8
+        $failure = $null
+        try { $null = Read-BehaviorSnapshot $snapshot } catch { $failure = $_.Exception.Message }
+        if ($failure -ne 'Invalid control snapshot event.') { throw 'Malformed snapshot was not rejected.' }
+    }
+} finally { Remove-Item $snapshot }
 foreach ($case in $cases) {
     $failure = $null
     try {

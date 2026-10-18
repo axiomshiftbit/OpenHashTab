@@ -1,6 +1,16 @@
 name: Windows 11 lifecycle
 on:
   workflow_call:
+    inputs:
+      build_run:
+        type: string
+        default: ''
+      control_run:
+        type: string
+        default: ''
+      windows_version:
+        type: string
+        default: both
 permissions:
   contents: read
   actions: read
@@ -12,7 +22,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        os: [windows-11-25h2, windows-11-26h2]
+        os: ${{ fromJSON(inputs.windows_version == 'windows-11-25h2' && '["windows-11-25h2"]' || inputs.windows_version == 'windows-11-26h2' && '["windows-11-26h2"]' || '["windows-11-25h2","windows-11-26h2"]') }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -21,14 +31,27 @@ jobs:
         with:
           name: binaries-and-tests
           path: binaries
+          run-id: ${{ inputs.build_run || github.run_id }}
+          github-token: ${{ github.token }}
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        if: inputs.control_run != ''
+        with:
+          name: windows-shell-control
+          path: binaries/control
+          run-id: ${{ inputs.control_run }}
+          github-token: ${{ github.token }}
       - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
         with:
           name: installers-candidate
           path: installers
+          run-id: ${{ inputs.build_run || github.run_id }}
+          github-token: ${{ github.token }}
       - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
         with:
           name: previous-installers-test-only
           path: baseline
+          run-id: ${{ inputs.build_run || github.run_id }}
+          github-token: ${{ github.token }}
       - name: Install, update, repair, launch and uninstall on Windows 11
         env:
           CLIENT_OS: ${{ matrix.os }}
