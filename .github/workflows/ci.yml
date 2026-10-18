@@ -145,12 +145,12 @@ jobs:
           python automation/Check-CodeQL.py "$env:RUNNER_TEMP/codeql-results" "$env:RUNNER_TEMP/diagnostics.csv"
       - name: Check restored NuGet packages and source dependencies
         run: python automation/Check-Vulnerabilities.py --assets
-      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: installers-candidate
           path: install/*.msi
           if-no-files-found: error
-      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: binaries-and-tests
           path: |
@@ -193,7 +193,7 @@ jobs:
           $PSNativeCommandUseErrorActionPreference = $true
           ./build_all.ps1
           if (@(Get-ChildItem install/*.msi).Count -ne 6) { throw 'The baseline must contain six installers.' }
-      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: previous-installers-test-only
           path: install/*.msi
@@ -295,7 +295,7 @@ jobs:
           path: installers
       - name: Package binaries, licenses, source and SHA-256 checksums
         run: python3 automation/Package.py
-      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: Windows11-release-candidate
           path: candidate/*
