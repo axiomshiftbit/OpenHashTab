@@ -222,8 +222,8 @@ jobs:
           path: baseline
           run-id: ${{ inputs.diagnostic_build_run }}
           github-token: ${{ github.token }}
-      - name: Diagnose installer lifecycle using the current test scripts
-        shell: pwsh
+      - name: Diagnose installer lifecycle using Windows PowerShell 5.1
+        shell: powershell
         run: ./automation/Test-Install.ps1 -Stage All -Architecture arm64
 
   arm64:

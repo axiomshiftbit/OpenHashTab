@@ -51,7 +51,11 @@ try {
     $shell = (Get-Process -Id $PID).Path
     Add-Type -Path "$PSScriptRoot\TestDesktopAccess.cs"
     $desktop = [TestDesktopAccess]::new($user.SID.Value)
-    $process = Start-Process $shell -Credential $credential -LoadUserProfile -UseNewEnvironment -WorkingDirectory $work -PassThru `
+    # Before PowerShell 7.1 the switch had the opposite effect on the native
+    # environment block. Pass null in both cases so Windows loads this user's
+    # environment, rather than the administrator's profile variables.
+    $newEnvironment = $PSVersionTable.PSVersion -ge [version]'7.1'
+    $process = Start-Process $shell -Credential $credential -LoadUserProfile -UseNewEnvironment:$newEnvironment -WorkingDirectory $work -PassThru `
         -ArgumentList "-NoProfile -ExecutionPolicy Bypass -File `"$work\Run.ps1`" -Architecture $Architecture" `
         -RedirectStandardOutput "$work\stdout.log" -RedirectStandardError "$work\stderr.log"
     if (-not $process.WaitForExit(600000)) {
