@@ -19,7 +19,8 @@ on:
         type: string
         required: true
 permissions:
-  contents: read
+  # GitHub exposes unpublished draft assets only to users with push access.
+  contents: write
   actions: read
 jobs:
   restore:
