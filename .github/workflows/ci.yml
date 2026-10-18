@@ -117,6 +117,7 @@ jobs:
           if (-not $env:VSINSTALLDIR) { throw 'Visual Studio 2022 is required for the analyzed build.' }
           ./build_all.ps1 -DisablePrecompiledHeaders
       - name: Analyze compiled C/C++ with CodeQL
+        id: codeql_analysis
         uses: github/codeql-action/analyze@f051dc808ef3645eb0d08647ec751634ec2304ac
         with:
           category: /language:c-cpp
@@ -125,6 +126,7 @@ jobs:
         shell: pwsh
         run: python automation/Check-CodeQL.py "$env:RUNNER_TEMP/codeql-results"
       - name: Require complete C/C++ extraction
+        if: ${{ !cancelled() && steps.codeql_analysis.outcome == 'success' }}
         shell: pwsh
         env:
           CODEQL_CLI: ${{ steps.codeql.outputs.codeql-path }}

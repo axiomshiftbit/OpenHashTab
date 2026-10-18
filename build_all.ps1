@@ -185,6 +185,29 @@ $Dotnet = Get-Command "dotnet";
 $Ninja = (Get-Command "ninja").Path;
 $LlvmPath = (Get-Item (Get-Command "clang").Path).Directory.FullName;
 
+# clang-cl accepts --target, but CodeQL 2.27.2 does not forward that option
+# when probing the compiler. A target-prefixed driver has the same target even
+# without arguments, so both compilation and extraction use the correct ABI.
+# Keep these copies and the resource-directory junction inside the build tree.
+$CompilerRoot = "$PSScriptRoot/build/compilers"
+$CompilerBin = "$CompilerRoot/bin"
+New-Item -Path $CompilerBin -ItemType Directory -Force | Out-Null
+if (-not (Test-Path "$CompilerRoot/lib")) {
+    New-Item -Path "$CompilerRoot/lib" -ItemType Junction -Value "$LlvmPath/../lib" | Out-Null
+}
+Get-ChildItem "$LlvmPath/*.dll" | Copy-Item -Destination $CompilerBin
+Copy-Item "$LlvmPath/lld-link.exe" -Destination $CompilerBin
+$Compilers = @{}
+foreach ($Target in @('i686-pc-windows-msvc', 'x86_64-pc-windows-msvc', 'aarch64-pc-windows-msvc')) {
+    $Compiler = "$CompilerBin/$Target-clang-cl.exe"
+    Copy-Item "$LlvmPath/clang-cl.exe" -Destination $Compiler
+    $CompilerVersion = (& $Compiler --version) -join "`n"
+    if ($CompilerVersion -notmatch "(?m)^Target: $([regex]::Escape($Target))\r?$") {
+        throw "Unexpected default compiler target for $Target."
+    }
+    $Compilers[$Target] = $Compiler
+}
+
 $OhtVersion = (Get-Content "$PSScriptRoot/VERSION" -Raw).Trim()
 if ($OhtVersion -notmatch '^(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)$') {
     throw 'VERSION must contain a numeric major.minor.patch version.'
@@ -202,22 +225,17 @@ Set-Environment -Environment $CleanEnv;
 Write-Host "Using Visual Studio at: $VSRoot"
 
 $x86_Environment = Get-CmdEnvironment -ScriptPath "$VSRoot\VC\Auxiliary\Build\vcvarsamd64_x86.bat";
-$x86_Environment["CFLAGS"] = "--target=i686-pc-windows-msvc";
-$x86_Environment["CXXFLAGS"] = "--target=i686-pc-windows-msvc";
-$x86_Environment["LDFLAGS"] = "--target=i686-pc-windows-msvc";
+$x86_Environment["CC"] = $Compilers['i686-pc-windows-msvc'];
+$x86_Environment["CXX"] = $Compilers['i686-pc-windows-msvc'];
 $x64_Environment = Get-CmdEnvironment -ScriptPath "$VSRoot\VC\Auxiliary\Build\vcvars64.bat";
-$x64_Environment["CFLAGS"] = "--target=x86_64-pc-windows-msvc";
-$x64_Environment["CXXFLAGS"] = "--target=x86_64-pc-windows-msvc";
-$x64_Environment["LDFLAGS"] = "--target=x86_64-pc-windows-msvc";
+$x64_Environment["CC"] = $Compilers['x86_64-pc-windows-msvc'];
+$x64_Environment["CXX"] = $Compilers['x86_64-pc-windows-msvc'];
 $ARM64_Environment = Get-CmdEnvironment -ScriptPath "$VSRoot\VC\Auxiliary\Build\vcvarsamd64_arm64.bat";
-$ARM64_Environment["CFLAGS"] = "--target=arm64-pc-windows-msvc";
-$ARM64_Environment["CXXFLAGS"] = "--target=arm64-pc-windows-msvc";
-$ARM64_Environment["LDFLAGS"] = "--target=arm64-pc-windows-msvc";
+$ARM64_Environment["CC"] = $Compilers['aarch64-pc-windows-msvc'];
+$ARM64_Environment["CXX"] = $Compilers['aarch64-pc-windows-msvc'];
 
 foreach ($env in @($x86_Environment, $x64_Environment, $ARM64_Environment)) {
     $Platform = $env["Platform"];
-    $env["CC"] = "$LlvmPath\clang-cl.exe";
-    $env["CXX"] = "$LlvmPath\clang-cl.exe";
     $env["INCLUDE"] += ";$WinSdkDir\Include\$WinSdkVer\shared;$WinSdkDir\Include\$WinSdkVer\ucrt;$WinSdkDir\Include\$WinSdkVer\um";
     $env["LIB"] += ";$WinSdkDir\Lib\$WinSdkVer\ucrt\$Platform;$WinSdkDir\Lib\$WinSdkVer\um\$Platform";
     $env["LIBPATH"] += ";$WinSdkDir\Lib\$WinSdkVer\ucrt\$Platform;$WinSdkDir\Lib\$WinSdkVer\um\$Platform";
