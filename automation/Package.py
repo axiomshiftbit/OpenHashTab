@@ -38,8 +38,10 @@ if os.environ.get("BUILD_RUN"):
 with zipfile.ZipFile(output / f"OpenHashTab-{version}-Windows11-candidate.zip", "w", zipfile.ZIP_DEFLATED) as archive:
     for path in installers:
         archive.write(path, path.name)
-    for name in ("COPYING", "README.md", "docs/Usage.md"):
+    for name in ("COPYING", "README.md", "README.ru.md", "docs/Usage.md"):
         archive.write(root / name, name)
+    for path in sorted((root / "docs/screenshots").glob("*.png")):
+        archive.write(path, path.relative_to(root).as_posix())
     for name in ("LICENSE.txt", "AUTHORS.md"):
         archive.write(root / "Algorithms/bee2/bee2" / name, "Bee2-" + name)
     for directory, filename, destination in (
