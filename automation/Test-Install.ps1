@@ -121,6 +121,10 @@ foreach ($scope in @($InstallScope)) {
     }
     $oldPackage = (Get-Item "$root\baseline\OpenHashTab_${scope}_${Architecture}.msi").FullName
     $oldProduct = Read-MsiProperty $oldPackage 'ProductCode'
+    $oldVersion = Read-MsiProperty $oldPackage 'ProductVersion'
+    if ($oldVersion -ne '3.1.1' -or [version]$oldVersion -ge [version]$version) {
+        throw "Expected an older 3.1.1 baseline installer, received '$oldVersion'."
+    }
     Run-Msi "/i `"$oldPackage`"" "$scope-baseline"
     if ($installer.ProductState($oldProduct) -ne 5) { throw 'Previous MSI did not install.' }
     Run-Msi "/i `"$package`"" "$scope-upgrade"
