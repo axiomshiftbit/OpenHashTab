@@ -26,7 +26,7 @@ if ($Stage -eq 'Start') {
     foreach ($eventName in @('ProcessCreate','NetworkConnect','ImageLoad','CreateRemoteThread','RawAccessRead','FileCreate','RegistryEvent','DnsQuery')) {
         $field = if ($eventName -eq 'CreateRemoteThread') { 'SourceImage' } else { 'Image' }
         $filters = ''
-        foreach ($name in @('CoreTests.exe','EncodingTests.exe','ShellTests.exe','StandaloneStub.exe')) {
+        foreach ($name in @('CoreTests.exe','EncodingTests.exe','ShellTests.exe','StandaloneStub.exe','WindowsShellControl.exe')) {
             $filters += "<$field condition=`"end with`">\$name</$field>"
             if ($eventName -eq 'ProcessCreate') { $filters += "<ParentImage condition=`"end with`">\$name</ParentImage>" }
         }
@@ -42,6 +42,21 @@ if ($Stage -eq 'Start') {
     Resolve-DnsName www.microsoft.com -DnsOnly | Out-Null
     $connection = New-Object Net.Sockets.TcpClient
     try { $connection.Connect('www.microsoft.com', 443) } finally { $connection.Dispose() }
+
+    # Run a renamed test executable before any project DLL is installed. Its
+    # separate mode only calls Windows APIs; freeze these events before the tests.
+    $control = Join-Path $directory 'WindowsShellControl.exe'
+    Copy-Item "$root\binaries\oht-x64\Tests\ShellTests.exe" $control
+    & $control --windows-control
+    if ($LASTEXITCODE -ne 0) { throw 'Windows-only shell control failed.' }
+    Start-Sleep -Seconds 5
+    $controlEvents = @(Get-WinEvent -LogName $log | Where-Object {
+        $data = Get-BehaviorEventData $_
+        $data.Image -like '*\WindowsShellControl.exe' -or $data.SourceImage -like '*\WindowsShellControl.exe' -or
+            $data.ParentImage -like '*\WindowsShellControl.exe'
+    } | ForEach-Object { [pscustomobject]@{ Id=$_.Id; Xml=$_.ToXml() } })
+    ConvertTo-Json -InputObject $controlEvents -Depth 4 | Set-Content "$directory\control-events.json" -Encoding utf8
+    Write-Host "Captured $($controlEvents.Count) events from the Windows-only control."
 
     Update-MpSignature
     $status = Get-MpComputerStatus
@@ -73,7 +88,15 @@ if ($Stage -eq 'Start') {
 
 Start-Sleep -Seconds 5
 $events = @(Get-WinEvent -FilterHashtable @{LogName=$log; Id=1,3,7,8,9,11,12,13,14,22})
-$counts = Get-VerifiedBehaviorCounts -Events $events
+$controls = @(Get-Content "$directory\control-events.json" -Raw | ConvertFrom-Json)
+# Preserve reviewed registry operations and values in test output even if the
+# admission check rejects one. Binary payload bytes are not exposed by Sysmon.
+$registry = @(@($controls) + $events | Where-Object Id -in @(12,13,14) | ForEach-Object {
+    $data = Get-BehaviorEventData $_
+    [pscustomobject]@{ Id=$_.Id; Image=$data.Image; Target=$data.TargetObject; Type=$data.EventType; Details=$data.Details }
+} | Sort-Object Image,Target,Id,Type,Details -Unique)
+Write-Host "Registry telemetry: $(ConvertTo-Json -InputObject $registry -Depth 3 -Compress)"
+$counts = Get-VerifiedBehaviorCounts -Events $events -ControlEvents $controls
 Write-Host "Observed application event counts: $($counts | ConvertTo-Json -Compress)"
 Write-Host 'PASS: tested offline hashing and installer lifecycle produced no application network, DNS, child-process, raw-disk or remote-thread events.'
 & "$directory\Sysmon64.exe" -u

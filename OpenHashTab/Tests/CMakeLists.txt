@@ -25,9 +25,11 @@ add_custom_command(TARGET CoreTests POST_BUILD
     COMMAND_EXPAND_LISTS)
 add_executable(ShellTests ../../tests/ShellTests.cpp)
 target_compile_definitions(ShellTests PRIVATE UNICODE _UNICODE)
-target_link_libraries(ShellTests PRIVATE ole32 shell32 comctl32 uuid)
+target_link_libraries(ShellTests PRIVATE ole32 shell32 comctl32 uuid urlmon)
 add_test(NAME load-extension COMMAND ShellTests --load-only $<TARGET_FILE:OpenHashTab>)
 set_tests_properties(load-extension PROPERTIES TIMEOUT 30)
+add_test(NAME windows-control COMMAND ShellTests --windows-control)
+set_tests_properties(windows-control PROPERTIES TIMEOUT 30)
 
 set_target_properties(CoreTests EncodingTests ShellTests PROPERTIES
     RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/Tests")

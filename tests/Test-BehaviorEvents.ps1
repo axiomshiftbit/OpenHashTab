@@ -15,7 +15,11 @@ $baseline = @(
     }
     New-BehaviorEvent 3 @{Image='C:\Windows\powershell.exe'; DestinationPort='443'}
     New-BehaviorEvent 22 @{Image='C:\Windows\powershell.exe'; QueryName='www.microsoft.com'}
-    New-BehaviorEvent 13 @{Image='C:\Test\StandaloneStub.exe'; TargetObject='HKU\S-1-5-21\Software\OpenHashTab\Setting'}
+    New-BehaviorEvent 13 @{Image='C:\Test\StandaloneStub.exe'; TargetObject='HKU\S-1-5-21-1-2-3-1000\Software\OpenHashTab\Setting'}
+)
+$control = @(
+    New-BehaviorEvent 1 @{Image='C:\Test\WindowsShellControl.exe'}
+    New-BehaviorEvent 7 @{Image='C:\Test\WindowsShellControl.exe'; ImageLoaded='C:\Windows\System32\shell32.dll'}
 )
 $cases = @(
     @{Events=$baseline; Error=''},
@@ -39,16 +43,59 @@ $cases += @{Events=@($baseline) + (New-BehaviorEvent 1 @{Image='C:\Windows\cmd.e
 $cases += @{Events=@($baseline) + (New-BehaviorEvent 13 @{Image='C:\Other.exe'; TargetObject='HKCU\Other'}); Error=''}
 $cases += @{Events=@($baseline) + (New-BehaviorEvent 7 @{Image='C:\Test\CoreTests.exe'}); Error=''}
 $cases += @{Events=@($baseline) + (New-BehaviorEvent 11 @{Image='C:\Test\CoreTests.exe'}); Error=''}
+# Finite registry exceptions need the same operation/value from the control.
+$registryData = @(
+    @{EventType='SetValue'; TargetObject='HKLM\System\CurrentControlSet\Services\bam\State\UserSettings\S-1-5-21-1-2-3-1000\\Device\HarddiskVolume3\Test\ShellTests.exe'; Details='Binary Data'}
+    @{EventType='SetValue'; TargetObject='HKLM\SOFTWARE\Microsoft\Windows NT\CurrentVersion\Notifications\Data\418A073AA3BC1C75'; Details='Binary Data'}
+    @{EventType='CreateKey'; TargetObject='HKU\S-1-5-21-1-2-3-1000\Software\Microsoft\Windows\CurrentVersion\Internet Settings\ZoneMap'; Details=''}
+    foreach ($name in @('AutoDetect','UNCAsIntranet','IntranetName','ProxyBypass')) {
+        @{EventType='SetValue'; TargetObject="HKU\S-1-5-21-1-2-3-1000\Software\Microsoft\Windows\CurrentVersion\Internet Settings\ZoneMap\$name"; Details='DWORD (0x00000001)'}
+    }
+)
+$allControls = @($control)
+foreach ($data in $registryData) {
+    $data.Image = 'C:\Test\ShellTests.exe'
+    $kind = if ($data.EventType -eq 'CreateKey') { 12 } else { 13 }
+    $app = New-BehaviorEvent $kind $data
+    $other = $data.Clone()
+    $other.Image = 'C:\Test\WindowsShellControl.exe'
+    $other.TargetObject = $other.TargetObject.Replace('ShellTests.exe','WindowsShellControl.exe')
+    $observed = @($control) + (New-BehaviorEvent $kind $other)
+    $allControls += New-BehaviorEvent $kind $other
+    $cases += @{Events=@($baseline) + $app; Control=$observed; Error=''}
+    $cases += @{Events=@($baseline) + $app; Error='Unexpected application behavior detected.'}
+    foreach ($change in @(@{EventType='DeleteKey'}, @{TargetObject=($data.TargetObject + 'Other')}, @{Details='DWORD (0x00000002)'})) {
+        $bad = $data.Clone()
+        foreach ($key in $change.Keys) { $bad[$key] = $change[$key] }
+        $cases += @{Events=@($baseline) + (New-BehaviorEvent $kind $bad); Control=$observed; Error='Unexpected application behavior detected.'}
+    }
+    $cases += @{Events=@($baseline) + (New-BehaviorEvent 14 $data); Control=$observed; Error='Unexpected application behavior detected.'}
+}
+$cases += @{Events=$baseline; Control=@(); Error='Missing Windows-only control telemetry.'}
+$cases += @{Events=$baseline; Control=@($control | Where-Object Id -ne 7); Error='Missing Windows-only control telemetry.'}
+$cases += @{Events=$baseline; Control=@($control) + (New-BehaviorEvent 7 @{Image='C:\Test\WindowsShellControl.exe'; ImageLoaded='C:\Test\OpenHashTab.dll'}); Error='Control loaded a non-Windows DLL.'}
+$cases += @{Events=$baseline; Control=@($control) + (New-BehaviorEvent 3 @{Image='C:\Test\WindowsShellControl.exe'}); Error='Unexpected control behavior.'}
+$cases += @{Events=$baseline; Control=@($control) + (New-BehaviorEvent 1 @{Image='C:\Windows\cmd.exe'; ParentImage='C:\Test\WindowsShellControl.exe'}); Error='Unexpected control process.'}
+$cases += @{Events=$baseline; Control=@($control | ConvertTo-Json -Depth 4 | ConvertFrom-Json); Error=''}
+foreach ($data in @(
+    @{Image='C:\Other\ShellTests.exe'; EventType='SetValue'; TargetObject=$registryData[0].TargetObject; Details='Binary Data'},
+    @{Image='C:\Test\CoreTests.exe'; EventType='SetValue'; TargetObject=$registryData[1].TargetObject; Details='Binary Data'},
+    @{Image='C:\Test\ShellTests.exe'; EventType='SetValue'; TargetObject='HKCU\Unrelated\Software\OpenHashTab\Setting'; Details='Binary Data'}
+)) {
+    $cases += @{Events=@($baseline) + (New-BehaviorEvent 13 $data); Control=$allControls; Error='Unexpected application behavior detected.'}
+}
+$cases += @{Events=@($baseline) + (New-BehaviorEvent 14 @{Image='C:\Test\CoreTests.exe'; TargetObject='HKCU\Software\OpenHashTab\Setting'; NewName='HKCU\Software\Microsoft\Windows\CurrentVersion\Run\Bad'}); Error='Unexpected application behavior detected.'}
 foreach ($case in $cases) {
     $failure = $null
     try {
-        $counts = Get-VerifiedBehaviorCounts -Events $case.Events
+        $observed = if ($case.ContainsKey('Control')) { @($case.Control) } else { $control }
+        $counts = Get-VerifiedBehaviorCounts -Events $case.Events -ControlEvents $observed
         foreach ($key in $counts.Keys) {
             if ($key -isnot [string]) { throw 'Event counts require string keys for Windows PowerShell JSON.' }
         }
         $json = $counts | ConvertTo-Json -Compress
         $decoded = $json | ConvertFrom-Json
-        if ($decoded.'1' -ne 4 -or $decoded.'13' -ne 1) { throw 'Event counts changed during JSON serialization.' }
+        if ($decoded.'1' -ne 4 -or $decoded.'13' -ne @($case.Events | Where-Object { $_.Id -eq 13 -and $_.Data.Image -match '\\(CoreTests|EncodingTests|ShellTests|StandaloneStub)\.exe$' }).Count) { throw 'Event counts changed during JSON serialization.' }
     } catch { $failure = $_.Exception.Message }
     if ($case.Error) {
         if (-not $failure -or -not $failure.StartsWith($case.Error)) {

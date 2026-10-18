@@ -4,6 +4,7 @@
 #include <Windows.h>
 #include <ShlObj.h>
 #include <CommCtrl.h>
+#include <urlmon.h>
 #include <cstdio>
 #include <string>
 #include <cstring>
@@ -73,8 +74,35 @@ static bool window_and_popup_menus(IContextMenu* context) {
   std::puts("PASS: context command opens/closes a window; repeated popup menus release USER handles");
   return true;
 }
+// Exercise Windows shell initialization before any OpenHashTab installation.
+// The renamed control executable never activates or loads the project DLL.
+static int windows_control() {
+  if (!ok(CoInitializeEx(nullptr, COINIT_APARTMENTTHREADED), "control COM initialization")) return 1;
+  wchar_t file[32768]{};
+  GetModuleFileNameW(nullptr, file, 32768);
+  PIDLIST_ABSOLUTE absolute{};
+  if (!ok(SHParseDisplayName(file, nullptr, &absolute, 0, nullptr), "control shell item")) return 1;
+  auto parent = ILCloneFull(absolute);
+  if (!parent) return 1;
+  PCUITEMID_CHILD children[] = {ILFindLastID(absolute)};
+  ILRemoveLastID(parent);
+  IDataObject* data{};
+  if (!ok(SHCreateDataObject(parent, 1, children, nullptr, IID_PPV_ARGS(&data)), "control shell data object")) return 1;
+  IInternetSecurityManager* security{};
+  if (!ok(CoInternetCreateSecurityManager(nullptr, &security, 0), "control URL security manager")) return 1;
+  DWORD zone{};
+  // A local file URL performs zone classification without a network request.
+  if (!ok(security->MapUrlToZone(L"file:///C:/Windows/explorer.exe", &zone, 0), "control local file zone")) return 1;
+  security->Release(); data->Release();
+  CoTaskMemFree(absolute); CoTaskMemFree(parent);
+  CoUninitialize();
+  if (GetModuleHandleW(L"OpenHashTab.dll")) return 1;
+  std::puts("PASS: Windows-only shell control; no project DLL activation");
+  return 0;
+}
 int wmain(int argc, wchar_t** argv) {
   SetErrorMode(SEM_FAILCRITICALERRORS | SEM_NOGPFAULTERRORBOX);
+  if (argc == 2 && std::wstring(argv[1]) == L"--windows-control") return windows_control();
   if (argc == 3 && std::wstring(argv[1]) == L"--load-only") {
     const auto module = LoadLibraryExW(argv[2], nullptr, LOAD_LIBRARY_SEARCH_DLL_LOAD_DIR | LOAD_LIBRARY_SEARCH_SYSTEM32);
     if (!module) {
