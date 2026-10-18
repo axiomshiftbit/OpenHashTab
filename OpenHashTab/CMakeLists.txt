@@ -33,7 +33,7 @@ add_link_options(
         /BREPRO
         /PDBALTPATH:%_PDB%
         /FILEALIGN:0x1000
-        /cetcompat
+        $<$<STREQUAL:${MSVC_C_ARCHITECTURE_ID},x64>:/cetcompat>
         /guard:cf
         /OPT:REF
         /OPT:ICF=10

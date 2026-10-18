@@ -86,7 +86,7 @@ target_link_options(${PROJECT_NAME} PRIVATE
         /BREPRO
         /PDBALTPATH:%_PDB%
         /FILEALIGN:0x1000
-        /cetcompat
+        $<$<STREQUAL:${MSVC_C_ARCHITECTURE_ID},x64>:/cetcompat>
         /guard:cf
         "/EXPORT:get_algorithms_begin_${OHT_FLAVOR}=get_algorithms_begin"
         "/EXPORT:get_algorithms_end_${OHT_FLAVOR}=get_algorithms_end"
