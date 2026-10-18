@@ -389,22 +389,33 @@ static void large_file_hashing() {
       "write nonzero sparse-file tail");
   CloseHandle(handle);
   if constexpr (sizeof(size_t) > 4) {
-    // A single Update exposes a 32-bit loop counter that chunked file reads do not.
+    // A single Update exposes truncated lengths/counters that chunked reads do not.
     const auto input = utl::OpenForRead(file.wstring());
-    check(input != INVALID_HANDLE_VALUE, "open CRC64 large-buffer fixture");
+    check(input != INVALID_HANDLE_VALUE, "open large-buffer fixture");
     const auto mapping = CreateFileMappingW(input, nullptr, PAGE_READONLY, 0, 0, nullptr);
-    check(mapping != nullptr, "map CRC64 large-buffer fixture");
+    check(mapping != nullptr, "map large-buffer fixture");
     const auto data = MapViewOfFile(mapping, FILE_MAP_READ, 0, 0, 0);
-    check(data != nullptr, "view CRC64 large-buffer fixture");
+    check(data != nullptr, "view large-buffer fixture");
     const auto size = static_cast<size_t>((1ULL << 32) + sizeof(tail) - 1);
-    const auto actual = digest(*LegacyHashAlgorithm::ByName("CRC64"),
-        std::string_view(static_cast<const char*>(data), size), size);
-    check(UnmapViewOfFile(data) != FALSE, "unmap CRC64 large-buffer fixture");
+    const std::pair<const char*, const char*> cases[] = {
+      {"CRC64", "7e3fbec98de8c6b6"},
+      {"MD4", "cf1ad89acf14ad0e0cfceb7aa4597455"},
+      {"MD5", "806fe73b29a32b261491798cd2a625e6"},
+      {"RipeMD160", "070aa79aa3d6da5bb92a06a38f147e984ecdbff4"},
+      {"SHA-1", "6d03306e9fbad8500bdd018917503cd728d4266d"},
+      {"SHA-224", "156342a8eeae80f58b61df7bb978826c6513b230a8d20842948c370b"},
+      {"SHA-256", "d1885540b2b008f0bb739130d1712a275c034811aa2828648f4bd931a371d6e3"},
+    };
+    for (const auto& [name, expected] : cases) {
+      const auto actual = digest(*LegacyHashAlgorithm::ByName(name),
+          std::string_view(static_cast<const char*>(data), size), size);
+      check(actual == utl::HashStringToBytes(std::string_view(expected)),
+          "single update includes the nonzero tail beyond 4 GiB");
+      std::printf("PASS: %s DLL single 4 GiB + 18 byte update\n", name);
+    }
+    check(UnmapViewOfFile(data) != FALSE, "unmap large-buffer fixture");
     CloseHandle(mapping);
     CloseHandle(input);
-    check(actual == utl::HashStringToBytes(std::string_view("7e3fbec98de8c6b6")),
-        "CRC64 single update includes the nonzero tail beyond 4 GiB");
-    std::puts("PASS: CRC64 DLL single 4 GiB + 18 byte update");
   }
   Coordinator coordinator({file.wstring()});
   for (auto& enabled : coordinator.settings.algorithms) enabled.SetNoSave(false);

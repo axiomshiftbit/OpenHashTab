@@ -76,7 +76,15 @@ public:
 
   void Update(const void* data, size_t size)
   {
-    UpdateRet(&ctx, (const unsigned char*)data, size);
+    // The pinned Mbed TLS hashes with 32-bit counters discard the high bits
+    // of a single input length. Split large buffers before entering the library.
+    auto bytes = static_cast<const unsigned char*>(data);
+    while (size) {
+      const auto count = std::min(size, static_cast<size_t>(UINT32_MAX));
+      UpdateRet(&ctx, bytes, count);
+      bytes += count;
+      size -= count;
+    }
   }
 
   void Finish(uint8_t* out)
