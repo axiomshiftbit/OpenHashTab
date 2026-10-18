@@ -84,9 +84,11 @@ jobs:
           }
       - name: Verify the checked XKCP source patch
         run: python -m unittest discover -s tests -p test_xkcp_patch.py -v
-      - name: Test Defender event correlation on Windows PowerShell 5.1
+      - name: Test security event checks on Windows PowerShell 5.1
         shell: powershell
-        run: ./tests/Test-DefenderScan.ps1
+        run: |
+          ./tests/Test-DefenderScan.ps1
+          ./tests/Test-BehaviorEvents.ps1
       - name: Initialize CodeQL for compiled C/C++
         id: codeql
         uses: github/codeql-action/init@f051dc808ef3645eb0d08647ec751634ec2304ac

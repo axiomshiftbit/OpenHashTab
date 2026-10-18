@@ -5,8 +5,8 @@ if ($env:OHT_DISPOSABLE_VM -notlike 'windows-11-*') { throw 'A disposable Window
 $root = Split-Path $PSScriptRoot
 $directory = Join-Path $root 'security-tools'
 $log = 'Microsoft-Windows-Sysmon/Operational'
-$images = '\\(CoreTests|EncodingTests|ShellTests|StandaloneStub)\.exe$'
 . "$PSScriptRoot\DefenderScan.ps1"
+. "$PSScriptRoot\BehaviorEvents.ps1"
 if ($Stage -eq 'Start') {
     $null = New-Item -ItemType Directory $directory -Force
     $zip = Join-Path $directory 'Sysmon.zip'
@@ -73,37 +73,8 @@ if ($Stage -eq 'Start') {
 
 Start-Sleep -Seconds 5
 $events = @(Get-WinEvent -FilterHashtable @{LogName=$log; Id=1,3,7,8,9,11,12,13,14,22})
-$counts = @{}
-$processes = @{}
-$networkControl = $false
-$dnsControl = $false
-$failures = [Collections.Generic.List[string]]::new()
-foreach ($event in $events) {
-    [xml]$xml = $event.ToXml()
-    $data = @{}
-    foreach ($item in $xml.Event.EventData.Data) { $data[$item.Name] = [string]$item.'#text' }
-    if ($data.Image -like '*\powershell.exe') {
-        if ($event.Id -eq 3 -and $data.DestinationPort -eq '443') { $networkControl = $true }
-        if ($event.Id -eq 22 -and $data.QueryName -eq 'www.microsoft.com') { $dnsControl = $true }
-    }
-    if ($event.Id -eq 1 -and $data.ParentImage -match $images) {
-        $failures.Add("Unexpected child process: $($data.Image), parent $($data.ParentImage)")
-    }
-    $source = if ($event.Id -eq 8) { $data.SourceImage } else { $data.Image }
-    if ($source -notmatch $images) { continue }
-    $counts[$event.Id] = 1 + $counts[$event.Id]
-    if ($event.Id -eq 1) { $processes[[IO.Path]::GetFileName($source)] = $true }
-    if ($event.Id -in @(3,8,9,22)) { $failures.Add("Unexpected event $($event.Id) from $source") }
-    if ($event.Id -in @(12,13,14) -and $data.TargetObject -notmatch '\\Software\\OpenHashTab(?:\\|$)') {
-        $failures.Add("Unexpected registry write: $($data.TargetObject) from $source")
-    }
-}
-foreach ($name in @('CoreTests.exe', 'EncodingTests.exe', 'ShellTests.exe', 'StandaloneStub.exe')) {
-    if (-not $processes.ContainsKey($name)) { throw "Missing process telemetry: $name" }
-}
-if (-not $networkControl -or -not $dnsControl) { throw 'Network/DNS telemetry positive control failed.' }
+$counts = Get-VerifiedBehaviorCounts -Events $events
 Write-Host "Observed application event counts: $($counts | ConvertTo-Json -Compress)"
-if ($failures.Count) { $failures | Write-Host; throw 'Unexpected application behavior detected.' }
 Write-Host 'PASS: tested offline hashing and installer lifecycle produced no application network, DNS, child-process, raw-disk or remote-thread events.'
 & "$directory\Sysmon64.exe" -u
 if ($LASTEXITCODE -ne 0) { throw 'Sysmon cleanup failed.' }
