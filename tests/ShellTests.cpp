@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 #define WIN32_LEAN_AND_MEAN
+#define STRICT_TYPED_ITEMIDS
 #include <Windows.h>
 #include <ShlObj.h>
 #include <CommCtrl.h>
