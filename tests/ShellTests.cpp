@@ -96,7 +96,7 @@ static int windows_control() {
   security->Release(); data->Release();
   CoTaskMemFree(absolute); CoTaskMemFree(parent);
   CoUninitialize();
-  if (GetModuleHandleW(L"OpenHashTab.dll")) return 1;
+  if (GetModuleHandleW(L"OpenHashTab32.dll") || GetModuleHandleW(L"OpenHashTab64.dll")) return 1;
   std::puts("PASS: Windows-only shell control; no project DLL activation");
   return 0;
 }

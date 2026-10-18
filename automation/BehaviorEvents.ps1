@@ -12,10 +12,11 @@ function Get-WindowsRegistrySignature([int]$Kind, [hashtable]$Data) {
     $target = $Data.TargetObject
     $sid = 'S-1-5-21-\d+-\d+-\d+-\d+'
     if ($Kind -eq 13 -and $Data.EventType -eq 'SetValue' -and
-        $target -match "^HKLM\\System\\CurrentControlSet\\Services\\bam\\State\\UserSettings\\$sid\\\\Device\\HarddiskVolume\d+(?<path>\\.+)$") {
+        $target -match "^HKLM\\System\\CurrentControlSet\\Services\\bam\\State\\UserSettings\\$sid\\\\Device\\(?<volume>HarddiskVolume\d+)(?<path>\\.+)$") {
         $path = $Matches.path
-        if ($Data.Image -notmatch '^[A-Z]:\\' -or $path -ne $Data.Image.Substring(2)) { return '' }
-        $target = 'BAM:own-image'
+        $volume = $Matches.volume
+        if ($Data.Image -notmatch '^C:\\' -or $path -ne $Data.Image.Substring(2)) { return '' }
+        $target = 'BAM:' + $volume + ':own-image'
     } elseif ($Data.Image -match '\\(ShellTests|WindowsShellControl)\.exe$' -and
         $Kind -eq 13 -and $Data.EventType -eq 'SetValue' -and
         $target -eq 'HKLM\SOFTWARE\Microsoft\Windows NT\CurrentVersion\Notifications\Data\418A073AA3BC1C75') {

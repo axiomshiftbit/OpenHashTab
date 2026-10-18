@@ -78,6 +78,8 @@ $cases += @{Events=$baseline; Control=@($control) + (New-BehaviorEvent 3 @{Image
 $cases += @{Events=$baseline; Control=@($control) + (New-BehaviorEvent 1 @{Image='C:\Windows\cmd.exe'; ParentImage='C:\Test\WindowsShellControl.exe'}); Error='Unexpected control process.'}
 $cases += @{Events=$baseline; Control=@($control | ConvertTo-Json -Depth 4 | ConvertFrom-Json); Error=''}
 foreach ($data in @(
+    @{Image='D:\Test\ShellTests.exe'; EventType='SetValue'; TargetObject=$registryData[0].TargetObject; Details='Binary Data'},
+    @{Image='C:\Test\ShellTests.exe'; EventType='SetValue'; TargetObject=$registryData[0].TargetObject.Replace('HarddiskVolume3','HarddiskVolume4'); Details='Binary Data'},
     @{Image='C:\Other\ShellTests.exe'; EventType='SetValue'; TargetObject=$registryData[0].TargetObject; Details='Binary Data'},
     @{Image='C:\Test\CoreTests.exe'; EventType='SetValue'; TargetObject=$registryData[1].TargetObject; Details='Binary Data'},
     @{Image='C:\Test\ShellTests.exe'; EventType='SetValue'; TargetObject='HKCU\Unrelated\Software\OpenHashTab\Setting'; Details='Binary Data'}
