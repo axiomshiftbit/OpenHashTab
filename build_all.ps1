@@ -14,7 +14,10 @@
 # You should have received a copy of the GNU General Public License
 # along with OpenHashTab.  If not, see <https://www.gnu.org/licenses/>.
 
-[CmdletBinding()] param ([switch]$DisablePrecompiledHeaders)
+[CmdletBinding()] param (
+    [switch]$DisablePrecompiledHeaders,
+    [ValidateSet('Clang', 'MSVC')][string]$Compiler = 'Clang'
+)
 
 $ErrorActionPreference = 'Stop'
 # PowerShell 7.3+ propagates failures from cmake, dotnet and signing commands.
@@ -199,13 +202,13 @@ Get-ChildItem "$LlvmPath/*.dll" | Copy-Item -Destination $CompilerBin
 Copy-Item "$LlvmPath/lld-link.exe" -Destination $CompilerBin
 $Compilers = @{}
 foreach ($Target in @('i686-pc-windows-msvc', 'x86_64-pc-windows-msvc', 'aarch64-pc-windows-msvc')) {
-    $Compiler = "$CompilerBin/$Target-clang-cl.exe"
-    Copy-Item "$LlvmPath/clang-cl.exe" -Destination $Compiler
-    $CompilerVersion = (& $Compiler --version) -join "`n"
+    $CompilerDriver = "$CompilerBin/$Target-clang-cl.exe"
+    Copy-Item "$LlvmPath/clang-cl.exe" -Destination $CompilerDriver
+    $CompilerVersion = (& $CompilerDriver --version) -join "`n"
     if ($CompilerVersion -notmatch "(?m)^Target: $([regex]::Escape($Target))\r?$") {
         throw "Unexpected default compiler target for $Target."
     }
-    $Compilers[$Target] = $Compiler
+    $Compilers[$Target] = $CompilerDriver
 }
 
 $OhtVersion = (Get-Content "$PSScriptRoot/VERSION" -Raw).Trim()
@@ -235,6 +238,12 @@ $ARM64_Environment["CC"] = $Compilers['aarch64-pc-windows-msvc'];
 $ARM64_Environment["CXX"] = $Compilers['aarch64-pc-windows-msvc'];
 
 foreach ($env in @($x86_Environment, $x64_Environment, $ARM64_Environment)) {
+    if ($Compiler -eq 'MSVC') {
+        # BLAKE3's GNU assembly still needs Clang; vcvars selects cl.exe's ABI.
+        $env['ASM'] = $env['CC']
+        $env['CC'] = 'cl.exe'
+        $env['CXX'] = 'cl.exe'
+    }
     $Platform = $env["Platform"];
     $env["INCLUDE"] += ";$WinSdkDir\Include\$WinSdkVer\shared;$WinSdkDir\Include\$WinSdkVer\ucrt;$WinSdkDir\Include\$WinSdkVer\um";
     $env["LIB"] += ";$WinSdkDir\Lib\$WinSdkVer\ucrt\$Platform;$WinSdkDir\Lib\$WinSdkVer\um\$Platform";
@@ -243,7 +252,7 @@ foreach ($env in @($x86_Environment, $x64_Environment, $ARM64_Environment)) {
     $env["Path"] += ";$WinSdkDir\bin\$WinSdkVer\x64";
 }
 
-Write-Host "Building OpenHashTab $OhtVersion"
+Write-Host "Building OpenHashTab $OhtVersion with $Compiler"
 
 New-Item -Path "install" -ItemType Directory -Force
 New-Item -Path "install\algorithms" -ItemType Directory -Force

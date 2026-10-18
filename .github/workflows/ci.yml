@@ -116,7 +116,7 @@ jobs:
           # Do not silently switch the STL/ATL headers when a newer VS is installed.
           $env:VSINSTALLDIR = & vswhere -latest -version '[17.0,18.0)' -products * -requires Microsoft.VisualStudio.Component.VC.Tools.x86.x64 -property installationPath
           if (-not $env:VSINSTALLDIR) { throw 'Visual Studio 2022 is required for the analyzed build.' }
-          ./build_all.ps1 -DisablePrecompiledHeaders
+          ./build_all.ps1 -DisablePrecompiledHeaders -Compiler MSVC
       - name: Analyze compiled C/C++ with CodeQL
         id: codeql_analysis
         uses: github/codeql-action/analyze@f051dc808ef3645eb0d08647ec751634ec2304ac

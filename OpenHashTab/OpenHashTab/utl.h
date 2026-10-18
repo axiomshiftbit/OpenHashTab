@@ -33,8 +33,7 @@ inline void DebugMsg(PCSTR fmt, ...) {
 
 namespace utl {
   inline HINSTANCE GetInstance() {
-    const auto base = __builtin_assume_aligned((const char*)&__ImageBase, 0x1000);
-    return (HINSTANCE)base;
+    return reinterpret_cast<HINSTANCE>(&__ImageBase);
   }
 
   template <typename Char>

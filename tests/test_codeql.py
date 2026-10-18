@@ -119,6 +119,7 @@ class CodeQLResults(unittest.TestCase):
             self.assertEqual(gate.diagnostic_findings([summary, detail], '2.27.2', root), 0)
             self.assertEqual(gate.diagnostic_findings([summary, detail], '2.27.3', root), 1)
             self.assertEqual(gate.diagnostic_findings([summary, dict(detail, severity='5')], '2.27.2', root), 1)
+            self.assertEqual(gate.diagnostic_findings([dict(summary, severity='5'), detail], '2.27.2', root), 1)
             self.assertEqual(gate.diagnostic_findings([summary, dict(detail, compilation='two')], '2.27.2', root), 1)
             with self.assertRaises(ValueError):
                 gate.diagnostic_findings([dict(detail, severity='-1')], '2.27.2', root)

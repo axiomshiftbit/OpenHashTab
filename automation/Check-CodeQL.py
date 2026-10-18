@@ -94,7 +94,7 @@ def diagnostic_findings(rows, version, root):
         severity, line = int(row['severity']), int(row['line'])
         if severity not in (3, 4, 5) or line < 0:
             raise ValueError('Invalid database diagnostic')
-        if row['message'] == 'There was an error during this compilation':
+        if severity == 4 and row['message'] == 'There was an error during this compilation':
             summaries.add(row['compilation'])
             continue
         detailed.add(row['compilation'])

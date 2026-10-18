@@ -23,12 +23,10 @@ set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_MSVC_RUNTIME_LIBRARY "MultiThreaded$<$<CONFIG:Debug>:Debug>")
 
 add_compile_options(
-        -flto
+        $<$<COMPILE_LANG_AND_ID:C,Clang>:-flto>
+        $<$<COMPILE_LANG_AND_ID:CXX,Clang>:-flto>
         /guard:cf
         /Zi
-        # clang-cl/MSVC leave __STDC__ undefined in C++. Match that in CodeQL
-        # too, so Windows SDK/ATL use the same anonymous COM unions.
-        $<$<COMPILE_LANGUAGE:CXX>:/U__STDC__>
 )
 
 add_link_options(
@@ -58,6 +56,7 @@ add_subdirectory(concurrentqueue)
 add_library(tiny-json STATIC tiny-json/tiny-json.c)
 target_include_directories(tiny-json PUBLIC tiny-json)
 
+if(CMAKE_CXX_COMPILER_ID STREQUAL "Clang")
 add_compile_options(
         -Wall
         -Wpedantic
@@ -72,6 +71,7 @@ add_compile_options(
         $<$<CONFIG:Debug>:-fsanitize=undefined>
         $<$<CONFIG:Debug>:-fsanitize-trap>
 )
+endif()
 
 add_subdirectory(AlgorithmsDlls)
 

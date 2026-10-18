@@ -21,7 +21,8 @@ project(AlgorithmsDll)
 set(CMAKE_CXX_STANDARD 20)
 
 add_compile_options(
-        -flto
+        $<$<COMPILE_LANG_AND_ID:C,Clang>:-flto>
+        $<$<COMPILE_LANG_AND_ID:CXX,Clang>:-flto>
         /GR-
         /GS-
         /EHs-c-
