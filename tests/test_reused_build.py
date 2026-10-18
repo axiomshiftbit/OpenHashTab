@@ -8,6 +8,41 @@ spec.loader.exec_module(reuse)
 
 
 class ReusedBuildTests(unittest.TestCase):
+    def test_reused_vm_allows_only_replayed_classifier(self):
+        before = "prefix\nfunction Get-WindowsRegistrySignature() { old }\nfunction Get-WindowsControlSignatures() {}"
+        reuse.check_vm_paths(["automation/BehaviorEvents.ps1"], before, before.replace("old", "new"))
+        for path in ("tests/ShellTests.cpp", "automation/Test-Behavior.ps1", ".github/workflows/windows11.yml", "automation/client/Guest.ps1", "Algorithms/Hasher2.cpp"):
+            with self.subTest(path=path), self.assertRaises(ValueError):
+                reuse.check_vm_paths([path], before, before)
+        with self.assertRaises(ValueError):
+            reuse.check_vm_paths([], before, before.replace("prefix", "changed"))
+
+    def test_reused_vm_artifacts_and_complete_evidence(self):
+        log = ""
+        for name in ("binaries-and-tests", "installers-candidate", "previous-installers-test-only", "windows-shell-control"):
+            run = "20" if name == "windows-shell-control" else "10"
+            log += ("T ##[group]Run actions/download-artifact@sha\nT   name: " + name +
+                    "\nT   run-id: " + run + "\nT   repository: owner/repo\nT ##[endgroup]\n")
+        markers = [
+            "PASS: Defender scanned the candidate files with current signatures.",
+            "PASS: tested offline hashing and installer lifecycle produced no application network, DNS, child-process, raw-disk or remote-thread events.",
+            "PASS: MSI machine-uninstall-after-reboot",
+            "Frozen control registry: []", "Registry telemetry: []",
+            'Observed application event counts: {"1":22,"7":811,"11":676,"12":9,"13":103}',
+        ]
+        log += "\n".join(markers)
+        self.assertEqual(reuse.vm_evidence(log, "10", "20", "owner/repo")["counts"]["1"], 22)
+        for marker in markers:
+            with self.subTest(marker=marker), self.assertRaises(ValueError):
+                reuse.vm_evidence(log.replace(marker, ""), "10", "20", "owner/repo")
+        for before, after in (("run-id: 10", "run-id: 11"), ("owner/repo", "other/repo"), ('"13":103', '"13":103,"14":1'), ('"13":103', '"13":103,"3":1')):
+            with self.subTest(after=after), self.assertRaises(ValueError):
+                reuse.vm_evidence(log.replace(before, after), "10", "20", "owner/repo")
+        with self.assertRaises(ValueError):
+            reuse.vm_evidence(log + "\n" + markers[-1], "10", "20", "owner/repo")
+        with self.assertRaises(ValueError):
+            reuse.vm_evidence(log + "\nUnexpected application behavior detected.", "10", "20", "owner/repo")
+
     def test_product_or_build_changes_reject(self):
         shell = "prefix\nstatic int windows_control() { return 0; }\nint wmain() {}"
         for path in ("Algorithms/Hasher2.cpp", "VERSION", "build_all.ps1", "Setup/Package.wxs", ".gitmodules", "Algorithms/bee2/bee2"):

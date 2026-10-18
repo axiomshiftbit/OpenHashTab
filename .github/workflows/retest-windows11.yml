@@ -7,33 +7,45 @@ on:
         type: string
         required: true
       windows_version:
-        description: Windows 11 image to retest; both are required to package a candidate
+        description: Windows 11 image to retest
         type: choice
         options: [windows-11-26h2, windows-11-25h2, both]
         default: windows-11-26h2
+      passed_vm_run:
+        description: Optional prior retest with the other image successful (verified before reuse)
+        type: string
+        default: ''
 permissions:
   contents: read
   actions: read
 jobs:
   provenance:
     name: Verify unchanged product and completed prerequisites
-    runs-on: ubuntu-24.04
+    runs-on: windows-2022
     outputs:
       build_commit: ${{ steps.verify.outputs.build_commit }}
+      control_run: ${{ steps.verify.outputs.control_run }}
+      passed_vm: ${{ steps.verify.outputs.passed_vm }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           fetch-depth: 0
           persist-credentials: false
-      - run: python3 -m unittest discover -s tests -p test_reused_build.py -v
+      - run: python -m unittest discover -s tests -p test_reused_build.py -v
+      - name: Test registry policy and snapshot persistence on PowerShell 5.1
+        shell: powershell
+        run: ./tests/Test-BehaviorEvents.ps1
       - id: verify
         env:
           BUILD_RUN: ${{ inputs.build_run }}
+          PASSED_VM_RUN: ${{ inputs.passed_vm_run }}
+          WINDOWS_VERSION: ${{ inputs.windows_version }}
           GH_TOKEN: ${{ github.token }}
-        run: python3 automation/Check-ReusedBuild.py
+        run: python automation/Check-ReusedBuild.py
   control:
     name: Test snapshot persistence and rebuild Windows-only control
     needs: provenance
+    if: needs.provenance.outputs.control_run == ''
     runs-on: windows-2022
     timeout-minutes: 20
     permissions:
@@ -43,9 +55,6 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
-      - name: Test the actual snapshot format on Windows PowerShell 5.1
-        shell: powershell
-        run: ./tests/Test-BehaviorEvents.ps1
       - uses: github/codeql-action/init@f051dc808ef3645eb0d08647ec751634ec2304ac
         with:
           languages: c-cpp
@@ -101,14 +110,15 @@ jobs:
       - run: python3 automation/Check-CodeQL.py "$RUNNER_TEMP/codeql-actions"
   windows11:
     needs: [provenance, control]
+    if: ${{ !cancelled() && needs.provenance.result == 'success' && (needs.control.result == 'success' || needs.provenance.outputs.control_run != '') }}
     uses: ./.github/workflows/windows11.yml
     with:
       build_run: ${{ inputs.build_run }}
-      control_run: ${{ format('{0}', github.run_id) }}
+      control_run: ${{ needs.provenance.outputs.control_run || format('{0}', github.run_id) }}
       windows_version: ${{ inputs.windows_version }}
   package:
     name: Package the reused and retested installers
-    if: inputs.windows_version == 'both'
+    if: ${{ !cancelled() && needs.provenance.result == 'success' && needs.codeql-actions.result == 'success' && needs.windows11.result == 'success' && (inputs.windows_version == 'both' || needs.provenance.outputs.passed_vm != '') }}
     needs: [provenance, codeql-actions, windows11]
     runs-on: ubuntu-24.04
     steps:
@@ -126,6 +136,7 @@ jobs:
         env:
           BUILD_RUN: ${{ inputs.build_run }}
           BUILD_COMMIT: ${{ needs.provenance.outputs.build_commit }}
+          PASSED_VM: ${{ needs.provenance.outputs.passed_vm }}
         run: python3 automation/Package.py
       - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:

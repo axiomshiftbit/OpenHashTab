@@ -43,7 +43,7 @@ $cases += @{Events=@($baseline) + (New-BehaviorEvent 1 @{Image='C:\Windows\cmd.e
 $cases += @{Events=@($baseline) + (New-BehaviorEvent 13 @{Image='C:\Other.exe'; TargetObject='HKCU\Other'}); Error=''}
 $cases += @{Events=@($baseline) + (New-BehaviorEvent 7 @{Image='C:\Test\CoreTests.exe'}); Error=''}
 $cases += @{Events=@($baseline) + (New-BehaviorEvent 11 @{Image='C:\Test\CoreTests.exe'}); Error=''}
-# Finite registry exceptions need the same operation/value from the control.
+# Finite registry exceptions need the same operation/value family from the control.
 $registryData = @(
     @{EventType='SetValue'; TargetObject='HKLM\System\CurrentControlSet\Services\bam\State\UserSettings\S-1-5-21-1-2-3-1000\\Device\HarddiskVolume3\Test\ShellTests.exe'; Details='Binary Data'}
     @{EventType='SetValue'; TargetObject='HKLM\SOFTWARE\Microsoft\Windows NT\CurrentVersion\Notifications\Data\418A073AA3BC1C75'; Details='Binary Data'}
@@ -88,6 +88,24 @@ foreach ($data in @(
     $cases += @{Events=@($baseline) + (New-BehaviorEvent 13 $data); Control=$allControls; Error='Unexpected application behavior detected.'}
 }
 $cases += @{Events=@($baseline) + (New-BehaviorEvent 14 @{Image='C:\Test\CoreTests.exe'; TargetObject='HKCU\Software\OpenHashTab\Setting'; NewName='HKCU\Software\Microsoft\Windows\CurrentVersion\Run\Bad'}); Error='Unexpected application behavior detected.'}
+# Windows may choose different WIL device-usage buckets for successive GUI processes.
+foreach ($pair in @(@(1,2), @(2,1))) {
+    $app = $registryData[$pair[0]].Clone()
+    $other = $registryData[$pair[1]].Clone()
+    $other.Image = 'C:\Test\WindowsShellControl.exe'
+    $observed = @($control) + (New-BehaviorEvent 13 $other)
+    $cases += @{Events=@($baseline) + (New-BehaviorEvent 13 $app); Control=$observed; Error=''}
+    foreach ($change in @(
+        @{TargetObject=$app.TargetObject.Substring(0, $app.TargetObject.Length - 4) + '2C75'},
+        @{Details='DWORD (0x00000001)'}, @{Image='C:\Test\StandaloneStub.exe'}
+    )) {
+        $bad = $app.Clone()
+        foreach ($key in $change.Keys) { $bad[$key] = $change[$key] }
+        $cases += @{Events=@($baseline) + (New-BehaviorEvent 13 $bad); Control=$observed; Error='Unexpected application behavior detected.'}
+    }
+    $other.Details = 'DWORD (0x00000001)'
+    $cases += @{Events=@($baseline) + (New-BehaviorEvent 13 $app); Control=@($control) + (New-BehaviorEvent 13 $other); Error='Unexpected application behavior detected.'}
+}
 # Round-trip the on-disk JSONL format used across a VM reboot, including PS 5.1.
 $snapshot = [IO.Path]::GetTempFileName()
 try {
@@ -122,3 +140,26 @@ foreach ($case in $cases) {
     } elseif ($failure) { throw $failure }
 }
 Write-Host "PASS: $($cases.Count) Sysmon behavior and JSON serialization cases."
+# Replay uses actual saved fields, without inventing process/network control events.
+$savedControl = @{Id=13; Image='C:\Test\WindowsShellControl.exe'; Target=$registryData[1].TargetObject; Type='SetValue'; Details='Binary Data'}
+$savedApp = @{Id=13; Image='C:\Test\ShellTests.exe'; Target=$registryData[2].TargetObject; Type='SetValue'; Details='Binary Data'}
+$replays = @(
+    @{control=@($savedControl); registry=@($savedApp)}
+    @{control=@(); registry=@($savedApp)}
+    @{control=@($savedControl); registry=@()}
+)
+foreach ($change in @(@{Target='HKCU\Software\Microsoft\Windows\CurrentVersion\Run\Bad'}, @{Id=14})) {
+    $bad = $savedApp.Clone()
+    foreach ($key in $change.Keys) { $bad[$key] = $change[$key] }
+    $replays += @{control=@($savedControl); registry=@($bad)}
+}
+$snapshot = [IO.Path]::GetTempFileName()
+try {
+    for ($i = 0; $i -lt $replays.Count; $i++) {
+        ConvertTo-Json -InputObject $replays[$i] -Depth 5 | Set-Content $snapshot -Encoding utf8
+        $failed = $false
+        try { & "$PSScriptRoot/../automation/Test-ReusedRegistry.ps1" -Evidence $snapshot } catch { $failed = $true }
+        if ($failed -ne ($i -ne 0)) { throw "Incorrect saved-registry replay verdict: $i" }
+    }
+} finally { Remove-Item $snapshot }
+Write-Host "PASS: $($replays.Count) saved-registry replay cases."

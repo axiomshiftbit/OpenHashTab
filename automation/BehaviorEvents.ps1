@@ -28,9 +28,15 @@ function Get-WindowsRegistrySignature([int]$Kind, [hashtable]$Data) {
         $target = 'BAM:' + $volume + ':own-image'
     } elseif ($Data.Image -match '\\(ShellTests|WindowsShellControl)\.exe$' -and
         $Kind -eq 13 -and $Data.EventType -eq 'SetValue' -and
+        $Data.Details -eq 'Binary Data' -and
         $target -in @('HKLM\SOFTWARE\Microsoft\Windows NT\CurrentVersion\Notifications\Data\418A073AA3BC1C75',
             'HKLM\SOFTWARE\Microsoft\Windows NT\CurrentVersion\Notifications\Data\418A073AA3BC2475')) {
-        # Windows notification state is accepted only if the control wrote this exact value.
+        # WNF_WIL_FEATURE_DEVICE_USAGE_TRACKING_1 / _2 are separate storage
+        # buckets of Windows feature-use telemetry. Require this finite family
+        # in the independent control, not whichever bucket the OS chose first.
+        # Names: googleprojectzero/sandbox-attacksurface-analysis-tools,
+        # 852b1586b8c4527f8be3f486801e4830220c76d0/NtCoreLib/NtWnfWellKnownNames.cs.
+        $target = 'WindowsFeatureDeviceUsageTracking:1-or-2'
     } elseif ($Data.Image -match '\\(ShellTests|WindowsShellControl)\.exe$' -and
         $target -match "^HKU\\$sid\\Software\\Microsoft\\Windows\\CurrentVersion\\Internet Settings\\ZoneMap(?<value>\\(?:AutoDetect|UNCAsIntranet|IntranetName|ProxyBypass))?$") {
         $value = $Matches.value
