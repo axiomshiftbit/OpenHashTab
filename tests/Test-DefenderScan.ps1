@@ -21,7 +21,12 @@ $cases = @(
     @{Events=@($start,$cancel); Expected='Cancelled'},
     @{Events=@($start,$end,$cancel); Expected='Cancelled'},
     @{Events=@((New-Event 1 1000 A),$end); Expected='Pending'},
-    @{Events=@((New-Event 1 1000 '' 'C:\Candidate'),(New-Event 2 1001 '')); Expected='Pending'}
+    @{Events=@((New-Event 1 1000 '' 'C:\Candidate'),(New-Event 2 1001 '')); Expected='Pending'},
+    @{Events=@((New-Event 1 1000 A 'folder:_C:\Candidate'),$end); Expected='Completed'},
+    @{Events=@((New-Event 1 1000 A 'FOLDER:_c:\candidate\'),$end); Expected='Completed'},
+    @{Events=@((New-Event 1 1000 A 'folder:_C:\Other'),$end); Expected='Pending'},
+    @{Events=@((New-Event 1 1000 A 'folder:_C:\Candidate\Child'),$end); Expected='Pending'},
+    @{Events=@((New-Event 1 1000 A 'file:_C:\Candidate'),$end); Expected='Pending'}
 )
 foreach ($case in $cases) {
     $state = Get-CandidateScanState -Events $case.Events -Directory 'C:\Candidate'
