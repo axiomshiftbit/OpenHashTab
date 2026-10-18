@@ -12,6 +12,74 @@ spec.loader.exec_module(gate)
 
 
 class CodeQLResults(unittest.TestCase):
+    def test_cli_read_exception_requires_reviewed_source_and_flow(self):
+        result = {
+            "ruleId": "cpp/path-injection", "level": "warning",
+            "locations": [{"physicalLocation": {
+                "artifactLocation": {"uri": "OpenHashTab/OpenHashTab/BatchOperations.cpp"},
+                "region": {"startLine": 51}}}],
+            "codeFlows": [{"threadFlows": [{"locations": [{"location": {"physicalLocation": {
+                "artifactLocation": {"uri": "OpenHashTab/CLI/Main.cpp"},
+                "region": {"startLine": 61}}}}]}]}],
+        }
+        source = b"reviewed read-only source\n"
+        pins = {path: hashlib.sha256(source).hexdigest() for path in gate.CLI_READ_SOURCES}
+        with tempfile.TemporaryDirectory() as directory, mock.patch.dict(gate.CLI_READ_SOURCES, pins, clear=True):
+            root = pathlib.Path(directory)
+            for path in pins:
+                (root / path).parent.mkdir(parents=True, exist_ok=True)
+                (root / path).write_bytes(source)
+            for line in (51, 258):
+                result["locations"][0]["physicalLocation"]["region"]["startLine"] = line
+                self.assertTrue(gate.reviewed_cli_read(result, "2.27.2", root))
+            for version in (None, "2.27.1", "2.27.3"):
+                self.assertFalse(gate.reviewed_cli_read(result, version, root))
+            changed = []
+            for key, values in (("ruleId", ["cpp/command-line-injection", "cpp/other"]),
+                                ("level", ["error", "note"]), ("locations", [[], result["locations"] * 2]),
+                                ("codeFlows", [[], [{}], {"threadFlows": []}])):
+                for value in values:
+                    item = copy.deepcopy(result)
+                    item[key] = [value] if key == "codeFlows" and isinstance(value, dict) else value
+                    changed.append(item)
+            for path, line in (("other.cpp", 51), ("OpenHashTab/OpenHashTab/BatchOperations.cpp", 52)):
+                item = copy.deepcopy(result)
+                sink = item["locations"][0]["physicalLocation"]
+                sink["artifactLocation"]["uri"] = path
+                sink["region"]["startLine"] = line
+                changed.append(item)
+            for path, line in (("network.cpp", 61), ("OpenHashTab/CLI/Main.cpp", 62)):
+                item = copy.deepcopy(result)
+                origin = item["codeFlows"][0]["threadFlows"][0]["locations"][0]["location"]["physicalLocation"]
+                origin["artifactLocation"]["uri"] = path
+                origin["region"]["startLine"] = line
+                changed.append(item)
+            item = copy.deepcopy(result)
+            item["codeFlows"][0]["threadFlows"][0]["locations"] = []
+            changed.append(item)
+            for item in changed:
+                with self.subTest(item=item):
+                    self.assertFalse(gate.reviewed_cli_read(item, "2.27.2", root))
+            for path in pins:
+                with self.subTest(source=path):
+                    (root / path).write_bytes(source.replace(b"\n", b"\r\n"))
+                    self.assertTrue(gate.reviewed_cli_read(result, "2.27.2", root))
+                    (root / path).write_bytes(b"changed source")
+                    self.assertFalse(gate.reviewed_cli_read(result, "2.27.2", root))
+                    (root / path).unlink()
+                    self.assertFalse(gate.reviewed_cli_read(result, "2.27.2", root))
+                    (root / path).write_bytes(source)
+            document = {"runs": [{"tool": {"driver": {"semanticVersion": "2.27.2", "rules": [
+                {"id": "cpp/path-injection", "defaultConfiguration": {"level": "warning"}}]}},
+                "results": [copy.deepcopy(result)]}]}
+            with mock.patch.object(gate, "__file__", str(root / "automation/Check-CodeQL.py")):
+                self.assertEqual(gate.findings(document), 0)
+                entry = document["runs"][0]
+                entry["results"][0]["message"] = {"text": "fixture"}
+                del entry["results"][0]["level"]
+                entry["tool"]["driver"]["rules"][0]["defaultConfiguration"]["level"] = "error"
+                self.assertEqual(gate.findings(document), 1)
+
     def test_extension_rule_without_legacy_rule_index(self):
         sarif = {"runs": [{"tool": {"driver": {"name": "CodeQL"}, "extensions": [{"rules": [
             {"id": "cpp/example", "properties": {"security-severity": "9.8"}}]}]}, "results": [

@@ -25,6 +25,49 @@ NUMERIC_SUFFIX_DIAGNOSTICS = {
 }
 
 
+# The CLI intentionally reads paths selected by its own caller, with that
+# caller's OS permissions. These two read-only opens are not a path sandbox:
+# one inspects a file-link target, the other opens the selected checksum file.
+# Review only the exact argv-to-read flows, analyzer version and source bytes.
+# Other sources, sinks, rule IDs and changed code must still fail admission.
+CLI_READ_SOURCES = {
+    "OpenHashTab/OpenHashTab/BatchOperations.cpp": "98fbeb9477f0074c21838c87227c80c6fd06d4cd9f56d0f95b124402d450470a",
+    "OpenHashTab/CLI/Main.cpp": "86cebb99811f186ad2cb1fbc84d721b23a97b332ea0b64461e5532bc513507ec",
+    "OpenHashTab/CLI/CMakeLists.txt": "1845cf0e20b92cc326eb490d2cd29ea6e1315a125595503d23bd3a1ac19b6b97",
+}
+
+
+def reviewed_cli_read(result, version, root):
+    identifier = result.get("ruleId", result.get("rule", {}).get("id"))
+    if version != "2.27.2" or identifier != "cpp/path-injection" or result.get("level", "warning") != "warning":
+        return False
+    locations = result.get("locations", [])
+    if len(locations) != 1:
+        return False
+    sink = locations[0].get("physicalLocation", {})
+    if (sink.get("artifactLocation", {}).get("uri") != "OpenHashTab/OpenHashTab/BatchOperations.cpp" or
+            sink.get("region", {}).get("startLine") not in (51, 258)):
+        return False
+    flows = result.get("codeFlows", [])
+    if not flows:
+        return False
+    for flow in flows:
+        threads = flow.get("threadFlows", [])
+        if not threads:
+            return False
+        for thread in threads:
+            steps = thread.get("locations", [])
+            if not steps:
+                return False
+            source = steps[0].get("location", {}).get("physicalLocation", {})
+            if (source.get("artifactLocation", {}).get("uri") != "OpenHashTab/CLI/Main.cpp" or
+                    source.get("region", {}).get("startLine") != 61):
+                return False
+    return all((root / path).is_file() and
+               hashlib.sha256((root / path).read_bytes().replace(b"\r\n", b"\n")).hexdigest() == digest
+               for path, digest in CLI_READ_SOURCES.items())
+
+
 def reviewed_numeric_warning(notification, version, root):
     if (version != "2.27.2" or notification.get("level", "warning") != "warning" or
             notification.get("descriptor", {}).get("id") != "cpp/diagnostics/extraction-warnings"):
@@ -79,6 +122,10 @@ def findings(document):
                 raise ValueError(f"SARIF result has no matching rule: {identifier}")
             rule = rules[identifier]
             level = result.get("level", rule.get("defaultConfiguration", {}).get("level", "warning"))
+            if level == "warning" and reviewed_cli_read(result, run["tool"]["driver"].get("semanticVersion"),
+                                                       pathlib.Path(__file__).resolve().parents[1]):
+                print("CodeQL: reviewed argv-to-read-only-file false positive; pinned CLI sources verified.")
+                continue
             severity = rule.get("properties", {}).get("security-severity", "not assigned")
             print(f"{identifier}: {level}; security severity {severity}; {result['message']['text']}")
             failures += level in ("warning", "error")
