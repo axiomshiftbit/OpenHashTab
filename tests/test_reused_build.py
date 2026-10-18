@@ -30,7 +30,9 @@ class ReusedBuildTests(unittest.TestCase):
     def test_recovery_rejects_paths_and_symlinks(self):
         with tempfile.TemporaryDirectory() as directory:
             root = pathlib.Path(directory)
-            for name in ("../escape", "/absolute", "back\\slash", "symlink"):
+            # ZipInfo normalizes native separators on Windows; traversal must
+            # remain invalid both before and after that normalization.
+            for name in ("../escape", "/absolute", "..\\escape", "symlink"):
                 with self.subTest(name=name):
                     archive = root / "bad.zip"
                     entry = zipfile.ZipInfo(name)
