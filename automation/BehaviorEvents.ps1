@@ -71,7 +71,7 @@ function Get-WindowsControlSignatures([object[]]$Events) {
 
 function Get-VerifiedBehaviorCounts {
     param([object[]]$Events, [object[]]$ControlEvents)
-    $images = '\\(CoreTests|EncodingTests|ShellTests|StandaloneStub)\.exe$'
+    $images = '\\(CoreTests|EncodingTests|ExtendedHashTests|ReportTests|BatchTests|OpenHashTabCLI|ShellTests|StandaloneStub)\.exe$'
     $controls = Get-WindowsControlSignatures $ControlEvents
     $ownRegistry = '^HK(U\\S-1-5-21-\d+-\d+-\d+-\d+|CU|LM)\\Software\\OpenHashTab(?:\\|$)'
     $counts = @{}
@@ -104,7 +104,7 @@ function Get-VerifiedBehaviorCounts {
             else { $failures.Add("Unexpected registry write: $($data.TargetObject) from $source; $($data.EventType); $($data.Details)") }
         }
     }
-    foreach ($name in @('CoreTests.exe', 'EncodingTests.exe', 'ShellTests.exe', 'StandaloneStub.exe')) {
+    foreach ($name in @('CoreTests.exe', 'EncodingTests.exe', 'ExtendedHashTests.exe', 'ReportTests.exe', 'BatchTests.exe', 'OpenHashTabCLI.exe', 'ShellTests.exe', 'StandaloneStub.exe')) {
         if (-not $processes.ContainsKey($name)) { throw "Missing process telemetry: $name" }
     }
     if (-not $networkControl -or -not $dnsControl) { throw 'Network/DNS telemetry positive control failed.' }

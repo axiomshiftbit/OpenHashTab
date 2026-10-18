@@ -23,8 +23,8 @@
 
 class LegacyHashAlgorithm {
 public:
-  static constexpr auto k_count = 36;
-  static constexpr auto k_max_size = 66;
+  static constexpr auto k_count = 61;
+  static constexpr auto k_max_size = 128;
 
   using AlgorithmsType = LegacyHashAlgorithm[k_count];
 

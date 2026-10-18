@@ -270,7 +270,7 @@ std::wstring utl::SaveDialog(HWND hwnd, const wchar_t* defpath, const wchar_t* d
   of.lpstrFile = name.get();
   of.nMaxFile = PATHCCH_MAX_CCH;
   of.lpstrInitialDir = defpath;
-  of.Flags = OFN_EXPLORER | OFN_OVERWRITEPROMPT;
+  of.Flags = OFN_EXPLORER | OFN_OVERWRITEPROMPT | OFN_NOCHANGEDIR | OFN_PATHMUSTEXIST;
   if (!GetSaveFileNameW(&of)) {
     const auto error = CommDlgExtendedError();
     // if error is 0 the user just cancelled the action
@@ -290,7 +290,7 @@ std::wstring utl::SaveDialog(HWND hwnd, const wchar_t* defpath, const wchar_t* d
   return {name.get()};
 }
 
-DWORD utl::SaveMemoryAsFile(const wchar_t* path, const void* p, DWORD size) {
+DWORD utl::SaveMemoryAsFile(const wchar_t* path, const void* p, size_t size) {
   const auto h = CreateFileW(
     MakePathLongCompatible(path).c_str(),
     GENERIC_WRITE,
@@ -308,9 +308,15 @@ DWORD utl::SaveMemoryAsFile(const wchar_t* path, const void* p, DWORD size) {
     return error;
   }
 
-  DWORD written = 0;
-  if (!WriteFile(h, p, size, &written, nullptr))
-    error = GetLastError();
+  const auto data = static_cast<const uint8_t*>(p);
+  for (size_t offset = 0; offset < size;) {
+    const auto count = static_cast<DWORD>(std::min<size_t>(size - offset, 1024 * 1024));
+    DWORD written{};
+    if (!WriteFile(h, data + offset, count, &written, nullptr)) { error = GetLastError(); break; }
+    if (!written) { error = ERROR_WRITE_FAULT; break; }
+    offset += written;
+  }
+  if (!error && !FlushFileBuffers(h)) error = GetLastError();
 
   CloseHandle(h);
   return error;

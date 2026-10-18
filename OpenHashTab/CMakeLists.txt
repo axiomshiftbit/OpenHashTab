@@ -84,6 +84,7 @@ add_subdirectory(Benchmark)
 add_subdirectory(OpenHashTab)
 
 add_subdirectory(StandaloneStub)
+add_subdirectory(CLI)
 
 include(CTest)
 if(BUILD_TESTING)

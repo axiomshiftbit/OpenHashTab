@@ -23,6 +23,9 @@
 #include "SettingsDialog.h"
 #include "utl.h"
 #include "virustotal.h"
+#include "ProgressText.h"
+#include "CompareDialog.h"
+#include "ReportUI.h"
 #include "wnd.h"
 
 static bool ColorLine(const Settings& settings, LPNMLVCUSTOMDRAW plvcd, HashColorType type) {
@@ -299,7 +302,7 @@ void MainDialog::UpdateDefaultStatus(bool force_reset) {
     _temporary_status = false;
 
   if (!_temporary_status) {
-    const auto msg = _finished ? IDS_DONE : IDS_PROCESSING;
+    const auto msg = _cancelled ? IDS_CANCELLED : _finished ? IDS_DONE : IDS_PROCESSING;
     SetWindowTextW(_hwnd_STATIC_PROCESSING, utl::GetString(msg).c_str());
   }
 }
@@ -316,6 +319,7 @@ INT_PTR MainDialog::DlgProc(UINT msg, WPARAM wparam, LPARAM lparam) {
     { &MainDialog::OnAllFilesFinished,  wnd::WM_USER_ALL_FILES_FINISHED, wnd::Match_w, wnd::k_user_magic_wparam },
     { &MainDialog::OnFileProgress,      wnd::WM_USER_FILE_PROGRESS, wnd::Match_w, wnd::k_user_magic_wparam },
     { &MainDialog::OnStatusUpdateTimer, WM_TIMER,   wnd::Match_w,   k_status_update_timer_id },
+    { &MainDialog::OnProgressTimer,     WM_TIMER,   wnd::Match_w,   k_progress_timer_id },
     { &MainDialog::OnHashListNotify,    WM_NOTIFY,  wnd::Match_w,   IDC_HASH_LIST },
     { &MainDialog::OnHashEditChanged,   WM_COMMAND, wnd::Match_wlh, MAKELONG(IDC_EDIT_HASH, EN_CHANGE) },
     { &MainDialog::OnClipboardClicked,  WM_COMMAND, wnd::Match_wlh, MAKELONG(IDC_BUTTON_CLIPBOARD, BN_CLICKED) },
@@ -324,6 +328,8 @@ INT_PTR MainDialog::DlgProc(UINT msg, WPARAM wparam, LPARAM lparam) {
     { &MainDialog::OnCancelClicked,     WM_COMMAND, wnd::Match_wlh, MAKELONG(IDC_BUTTON_CANCEL, BN_CLICKED) },
     { &MainDialog::OnVTClicked,         WM_COMMAND, wnd::Match_wlh, MAKELONG(IDC_BUTTON_VT, BN_CLICKED) },
     { &MainDialog::OnSummaryClicked,    WM_COMMAND, wnd::Match_wlh, MAKELONG(IDC_BUTTON_SUMMARY, BN_CLICKED) },
+    { &MainDialog::OnCompareClicked,    WM_COMMAND, wnd::Match_wlh, MAKELONG(IDC_BUTTON_COMPARE, BN_CLICKED) },
+    { &MainDialog::OnReportClicked,     WM_COMMAND, wnd::Match_wlh, MAKELONG(IDC_BUTTON_REPORT, BN_CLICKED) },
     { &MainDialog::OnEditColor,         WM_CTLCOLOREDIT, wnd::Match_all, 0 },
   };
   // clang-format on
@@ -351,6 +357,8 @@ INT_PTR MainDialog::OnInitDialog(UINT, WPARAM, LPARAM) {
   utl::SetWindowTextStringFromTable(_hwnd_STATIC_PROCESSING, IDS_PROCESSING);
   utl::SetWindowTextStringFromTable(_hwnd_BUTTON_CLIPBOARD, IDS_CLIPBOARD);
   utl::SetWindowTextStringFromTable(_hwnd_BUTTON_CANCEL, IDS_CANCEL);
+  utl::SetWindowTextStringFromTable(GetDlgItem(_hwnd, IDC_BUTTON_COMPARE), IDS_COMPARE);
+  utl::SetWindowTextStringFromTable(GetDlgItem(_hwnd, IDC_BUTTON_REPORT), IDS_REPORT);
 
   SendMessageW(_hwnd_HASH_LIST, LVM_SETTEXTBKCOLOR, 0, CLR_NONE);
   SendMessageW(_hwnd_HASH_LIST, LVM_SETEXTENDEDLISTVIEWSTYLE, 0, LVS_EX_FULLROWSELECT);
@@ -418,6 +426,9 @@ INT_PTR MainDialog::OnInitDialog(UINT, WPARAM, LPARAM) {
   if (_prop_page->GetFiles().size() == 1)
     ListView_SetColumnWidth(_hwnd_HASH_LIST, ColIndex_Filename, 0);
 
+  _started = GetTickCount64();
+  SetTimer(_hwnd, k_progress_timer_id, 500, nullptr);
+  OnProgressTimer(0, 0, 0);
   _prop_page->ProcessFiles();
 
   return FALSE;
@@ -464,12 +475,16 @@ INT_PTR MainDialog::OnAllFilesFinished(UINT, WPARAM, LPARAM) {
     FileFinished(file.get());
 
   _finished = true;
+  KillTimer(_hwnd, k_progress_timer_id);
+  OnProgressTimer(0, 0, 0);
 
   // We only enable settings button after processing is done because changing enabled algorithms could result
   // in much more problems
   Button_Enable(_hwnd_BUTTON_SETTINGS, true);
   Button_Enable(_hwnd_BUTTON_EXPORT, true);
   Button_Enable(_hwnd_BUTTON_CLIPBOARD, true);
+  EnableWindow(GetDlgItem(_hwnd, IDC_BUTTON_COMPARE), TRUE);
+  EnableWindow(GetDlgItem(_hwnd, IDC_BUTTON_REPORT), TRUE);
 
   if (detail::GetMachineSettingDWORD("ForceDisableVT", 0) == 0)
     Button_Enable(_hwnd_BUTTON_VT, true);
@@ -506,6 +521,12 @@ INT_PTR MainDialog::OnFileProgress(UINT, WPARAM, LPARAM lparam) {
 
 INT_PTR MainDialog::OnStatusUpdateTimer(UINT, WPARAM, LPARAM) {
   UpdateDefaultStatus(true);
+  return FALSE;
+}
+
+INT_PTR MainDialog::OnProgressTimer(UINT, WPARAM, LPARAM) {
+  const auto text = ProgressText(_prop_page->GetProgress(), GetTickCount64() - _started, _finished || _cancelled);
+  SetWindowTextW(GetDlgItem(_hwnd, IDC_PROGRESS_DETAILS), text.c_str());
   return FALSE;
 }
 
@@ -574,6 +595,7 @@ INT_PTR MainDialog::OnExportClicked(UINT, WPARAM, LPARAM) {
 }
 
 INT_PTR MainDialog::OnCancelClicked(UINT, WPARAM, LPARAM) {
+  _cancelled = true;
   _prop_page->Cancel(true);
 
   return FALSE;
@@ -639,6 +661,30 @@ INT_PTR MainDialog::OnSummaryClicked(UINT, WPARAM, LPARAM) {
     _count_error
   );
   MessageBoxW(_hwnd, msg, utl::GetString(IDS_SUMMARY).c_str(), MB_OK);
+  return TRUE;
+}
+
+INT_PTR MainDialog::OnCompareClicked(UINT, WPARAM, LPARAM) {
+  DialogBoxParamW(utl::GetInstance(), MAKEINTRESOURCEW(IDD_COMPARE), _hwnd, &wnd::DlgProcClassBinder<CompareDialog>, 0);
+  return TRUE;
+}
+
+INT_PTR MainDialog::OnReportClicked(UINT, WPARAM, LPARAM) {
+  if (!_finished) return FALSE;
+  const auto menu = CreatePopupMenu();
+  if (!menu) return FALSE;
+  AppendMenuW(menu, MF_STRING, 1, utl::GetString(IDS_REPORT_JSON).c_str());
+  AppendMenuW(menu, MF_STRING, 2, utl::GetString(IDS_REPORT_CSV).c_str());
+  RECT rectangle{};
+  GetWindowRect(GetDlgItem(_hwnd, IDC_BUTTON_REPORT), &rectangle);
+  const auto choice = TrackPopupMenu(menu, TPM_RETURNCMD | TPM_LEFTALIGN | TPM_TOPALIGN, rectangle.left, rectangle.bottom, 0, _hwnd, nullptr);
+  DestroyMenu(menu);
+  if (choice == 1 || choice == 2) {
+    const auto text = utl::GetWindowTextString(_hwnd_EDIT_HASH);
+    const auto expected = _prop_page->settings.checkagainst_strict ?
+        utl::HashStringToBytes(std::wstring_view(text)) : utl::FindHashInString(std::wstring_view(text));
+    SaveReport(_hwnd, VerificationReport(*_prop_page, expected), choice == 1 ? oht::ReportFormat::Json : oht::ReportFormat::Csv);
+  }
   return TRUE;
 }
 

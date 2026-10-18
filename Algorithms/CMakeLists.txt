@@ -60,6 +60,7 @@ add_subdirectory(mbedtls)
 add_subdirectory(blake2sp)
 add_subdirectory(BLAKE3)
 add_subdirectory(bee2)
+add_subdirectory(extended)
 
 add_library(${PROJECT_NAME} SHARED
         Hasher2.cpp
@@ -79,6 +80,7 @@ target_link_libraries(${PROJECT_NAME}
         blake2sp
         BLAKE3
         bee2_hash
+        extended_hashes
         ntdllp
         )
 

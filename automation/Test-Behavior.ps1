@@ -26,7 +26,7 @@ if ($Stage -eq 'Start') {
     foreach ($eventName in @('ProcessCreate','NetworkConnect','ImageLoad','CreateRemoteThread','RawAccessRead','FileCreate','RegistryEvent','DnsQuery')) {
         $field = if ($eventName -eq 'CreateRemoteThread') { 'SourceImage' } else { 'Image' }
         $filters = ''
-        foreach ($name in @('CoreTests.exe','EncodingTests.exe','ShellTests.exe','StandaloneStub.exe','WindowsShellControl.exe')) {
+        foreach ($name in @('CoreTests.exe','EncodingTests.exe','ExtendedHashTests.exe','ReportTests.exe','BatchTests.exe','OpenHashTabCLI.exe','ShellTests.exe','StandaloneStub.exe','WindowsShellControl.exe')) {
             $filters += "<$field condition=`"end with`">\$name</$field>"
             if ($eventName -eq 'ProcessCreate') { $filters += "<ParentImage condition=`"end with`">\$name</ParentImage>" }
         }

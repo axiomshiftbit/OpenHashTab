@@ -17,6 +17,15 @@ import xml.etree.ElementTree as ET
 
 ROOT = pathlib.Path(__file__).resolve().parents[1]
 
+# Source archives copied into Algorithms/extended, with local changes documented
+# there. Query their original commits in addition to recursive git submodules.
+VENDORED_GIT = {
+    "BLAKE2/BLAKE2": "ed1974ea83433eba7b2d95c5dcd9ac33cb847913",
+    "ascon/ascon-c": "446347f21b209f3921c65ece70027c366cbe1693",
+    "pornin/sphlib": "15b6b8d8f3e4a43c58ba102d712fa6b8a3317035",
+    "sjinks/kupyna-c": "be73541d9694c04faa01dc0ad4a951d5d3056b52",
+}
+
 # These exact advisories concern modules absent from our hash-only Mbed TLS
 # build. Exceptions apply ONLY to the pinned source and build configuration
 # verified below. New advisories and changed build inputs require review.
@@ -138,7 +147,8 @@ def query_osv(query):
 
 
 def dependencies(assets=False):
-    queries = {}
+    queries = {f"Vendored Git: {name}@{commit}": {"commit": commit}
+               for name, commit in VENDORED_GIT.items()}
 
     def package(ecosystem, name, version):
         queries[f"{ecosystem}: {name}@{version}"] = {
@@ -216,6 +226,7 @@ def main():
                 print(f"  Severity: {json.dumps(finding.get('severity', []))}")
                 print(f"  https://osv.dev/vulnerability/{finding['id']}")
     print(f"Checked {len(queries)} dependency queries; {failures} findings.")
+    print("Coverage limit: the official Skein 1.3 archive has no OSV commit/package identifier; review its source and advisories separately.")
     print("An empty result means no matching advisory in OSV, not proof that code is safe.")
     if args.nvd:
         failures += nvd_findings()

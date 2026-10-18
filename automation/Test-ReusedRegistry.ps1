@@ -12,7 +12,7 @@ foreach ($event in $saved.control) {
 }
 $checked = 0
 foreach ($event in $saved.registry) {
-    if ($event.Image -notmatch '\\(CoreTests|EncodingTests|ShellTests|StandaloneStub)\.exe$') { continue }
+    if ($event.Image -notmatch '\\(CoreTests|EncodingTests|ExtendedHashTests|ReportTests|BatchTests|OpenHashTabCLI|ShellTests|StandaloneStub)\.exe$') { continue }
     $signature = Get-WindowsRegistrySignature $event.Id @{
         Image=$event.Image; TargetObject=$event.Target; EventType=$event.Type; Details=$event.Details
     }

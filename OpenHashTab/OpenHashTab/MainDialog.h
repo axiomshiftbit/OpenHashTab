@@ -24,6 +24,7 @@ class Coordinator;
 
 class MainDialog {
   static constexpr auto k_status_update_timer_id = (UINT_PTR)0x7c253816f7ef92ea;
+  static constexpr UINT_PTR k_progress_timer_id = 0x4f485450;
 
   enum ColIndex : int {
     ColIndex_Filename,
@@ -64,6 +65,8 @@ class MainDialog {
 
   bool _temporary_status{};
   bool _finished{};
+  bool _cancelled{};
+  uint64_t _started{};
   // volatile because reentrancy, and clang-tidy doesn't recognize that
   volatile bool _inhibit_reformat{};
   HashColorType _check_against_color{HashColorType::Unknown};
@@ -93,6 +96,7 @@ private:
   INT_PTR OnAllFilesFinished(UINT, WPARAM, LPARAM);
   INT_PTR OnFileProgress(UINT, WPARAM, LPARAM lparam);
   INT_PTR OnStatusUpdateTimer(UINT, WPARAM, LPARAM);
+  INT_PTR OnProgressTimer(UINT, WPARAM, LPARAM);
   INT_PTR OnHashListNotify(UINT, WPARAM, LPARAM lparam);
   INT_PTR OnExportClicked(UINT, WPARAM, LPARAM);
   INT_PTR OnCancelClicked(UINT, WPARAM, LPARAM);
@@ -104,4 +108,6 @@ private:
   INT_PTR OnEditColor(UINT, WPARAM, LPARAM);
   INT_PTR OnClipboardClicked(UINT, WPARAM, LPARAM);
   INT_PTR OnSettingsClicked(UINT, WPARAM, LPARAM);
+  INT_PTR OnCompareClicked(UINT, WPARAM, LPARAM);
+  INT_PTR OnReportClicked(UINT, WPARAM, LPARAM);
 };

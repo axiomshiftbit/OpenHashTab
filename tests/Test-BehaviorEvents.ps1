@@ -10,7 +10,7 @@ function New-BehaviorEvent([int]$Kind, [hashtable]$Data) {
     return $event
 }
 $baseline = @(
-    foreach ($name in @('CoreTests.exe','EncodingTests.exe','ShellTests.exe','StandaloneStub.exe')) {
+    foreach ($name in @('CoreTests.exe','EncodingTests.exe','ExtendedHashTests.exe','ReportTests.exe','BatchTests.exe','OpenHashTabCLI.exe','ShellTests.exe','StandaloneStub.exe')) {
         New-BehaviorEvent 1 @{Image="C:\Test\$name"; ParentImage='C:\Windows\powershell.exe'}
     }
     New-BehaviorEvent 3 @{Image='C:\Windows\powershell.exe'; DestinationPort='443'}
@@ -27,12 +27,19 @@ $cases = @(
     @{Events=@($baseline | Where-Object Id -ne 3); Error='Network/DNS telemetry positive control failed.'},
     @{Events=@($baseline | Where-Object Id -ne 22); Error='Network/DNS telemetry positive control failed.'}
 )
-foreach ($name in @('CoreTests.exe','EncodingTests.exe','ShellTests.exe','StandaloneStub.exe')) {
+foreach ($name in @('CoreTests.exe','EncodingTests.exe','ExtendedHashTests.exe','ReportTests.exe','BatchTests.exe','OpenHashTabCLI.exe','ShellTests.exe','StandaloneStub.exe')) {
     $cases += @{Events=@($baseline | Where-Object { $_.Id -ne 1 -or $_.Data.Image -ne "C:\Test\$name" }); Error='Missing process telemetry:'}
 }
 foreach ($kind in @(3,8,9,22)) {
     $data = if ($kind -eq 8) { @{SourceImage='C:\Test\CoreTests.exe'} } else { @{Image='C:\Test\CoreTests.exe'} }
     $cases += @{Events=@($baseline) + (New-BehaviorEvent $kind $data); Error='Unexpected application behavior detected.'}
+}
+foreach ($name in @('ExtendedHashTests.exe','ReportTests.exe','BatchTests.exe','OpenHashTabCLI.exe')) {
+    foreach ($kind in @(3,8,9,22)) {
+        $data = if ($kind -eq 8) { @{SourceImage="C:\Test\$name"} } else { @{Image="C:\Test\$name"} }
+        $cases += @{Events=@($baseline) + (New-BehaviorEvent $kind $data); Error='Unexpected application behavior detected.'}
+    }
+    $cases += @{Events=@($baseline) + (New-BehaviorEvent 1 @{Image='C:\Windows\cmd.exe'; ParentImage="C:\Test\$name"}); Error='Unexpected application behavior detected.'}
 }
 foreach ($kind in @(12,13,14)) {
     foreach ($key in @('HKCU\Software\Microsoft\Windows\CurrentVersion\Run\Test', 'HKCU\Software\OpenHashTabOther\Test')) {
@@ -131,7 +138,7 @@ foreach ($case in $cases) {
         }
         $json = $counts | ConvertTo-Json -Compress
         $decoded = $json | ConvertFrom-Json
-        if ($decoded.'1' -ne 4 -or $decoded.'13' -ne @($case.Events | Where-Object { $_.Id -eq 13 -and $_.Data.Image -match '\\(CoreTests|EncodingTests|ShellTests|StandaloneStub)\.exe$' }).Count) { throw 'Event counts changed during JSON serialization.' }
+        if ($decoded.'1' -ne 8 -or $decoded.'13' -ne @($case.Events | Where-Object { $_.Id -eq 13 -and $_.Data.Image -match '\\(CoreTests|EncodingTests|ExtendedHashTests|ReportTests|BatchTests|OpenHashTabCLI|ShellTests|StandaloneStub)\.exe$' }).Count) { throw 'Event counts changed during JSON serialization.' }
     } catch { $failure = $_.Exception.Message }
     if ($case.Error) {
         if (-not $failure -or -not $failure.StartsWith($case.Error)) {

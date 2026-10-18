@@ -71,7 +71,7 @@ jobs:
           @(
               "call `"$vs\VC\Auxiliary\Build\vcvarsall.bat`" amd64",
               'if errorlevel 1 exit /b %ERRORLEVEL%',
-              'cl.exe /nologo /std:c++20 /EHsc /MT /DUNICODE /D_UNICODE /Fe:WindowsShellControl.exe tests\ShellTests.cpp ole32.lib shell32.lib shlwapi.lib uuid.lib comctl32.lib urlmon.lib user32.lib',
+              'cl.exe /nologo /std:c++20 /EHsc /MT /DUNICODE /D_UNICODE /I Algorithms /Fe:WindowsShellControl.exe tests\ShellTests.cpp ole32.lib shell32.lib shlwapi.lib uuid.lib comctl32.lib urlmon.lib user32.lib gdi32.lib',
               'exit /b %ERRORLEVEL%'
           ) | Set-Content control.cmd
           & cmd.exe /d /c control.cmd

@@ -124,8 +124,8 @@ void Coordinator::FileProgressCallback(uint64_t size_progress) {
 
   const auto old_progress = _size_progressed.fetch_add(size_progress);
   const auto new_progress = old_progress + size_progress;
-  const auto old_part = old_progress * k_progress_resolution / _size_total;
-  const auto new_part = new_progress * k_progress_resolution / _size_total;
+  const auto old_part = oht::ProgressFraction({old_progress, _size_total}, k_progress_resolution);
+  const auto new_part = oht::ProgressFraction({new_progress, _size_total}, k_progress_resolution);
 
   if (old_part != new_part) {
     std::lock_guard guard{_window_mutex};

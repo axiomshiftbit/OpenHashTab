@@ -184,6 +184,7 @@ $WinSdkDir = If ($Env:WindowsSdkDir) { $Env:WindowsSdkDir } Else { $(Get-Item "h
 
 $Cmake = Get-Command "cmake";
 $Ctest = (Get-Command "ctest").Path;
+$Python = (Get-Command "python").Path;
 $Dotnet = Get-Command "dotnet";
 $Ninja = (Get-Command "ninja").Path;
 $LlvmPath = (Get-Item (Get-Command "clang").Path).Directory.FullName;
@@ -320,6 +321,7 @@ $OhtVersionNumeric = "$OhtVersionMajor.$OhtVersionMinor.$OhtVersionPatch";
         "-DCI_VERSION_MINOR=$OhtVersionMinor" `
         "-DCI_VERSION_PATCH=$OhtVersionPatch" `
         "-DCMAKE_DISABLE_PRECOMPILE_HEADERS=$DisablePrecompiledHeaders" `
+        "-DPython3_EXECUTABLE=$Python" `
         "-DBUILD_TESTING=ON"
     & $Cmake --build $BuildDir
 
@@ -327,6 +329,7 @@ $OhtVersionNumeric = "$OhtVersionMajor.$OhtVersionMinor.$OhtVersionPatch";
         & $Env:AUTHENTICODE_SIGN "$((Get-Item "$BuildDir\OpenHashTab*.dll").FullName)"
         & $Env:AUTHENTICODE_SIGN "$((Get-Item "$BuildDir\StandaloneStub.exe").FullName)"
         & $Env:AUTHENTICODE_SIGN "$((Get-Item "$BuildDir\Benchmark.exe").FullName)"
+        & $Env:AUTHENTICODE_SIGN "$((Get-Item "$BuildDir\OpenHashTabCLI.exe").FullName)"
     }
     
     if ($_ -ne "arm64") {

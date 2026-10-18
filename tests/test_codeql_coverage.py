@@ -39,6 +39,12 @@ class ExtractionCoverage(unittest.TestCase):
             with self.subTest(header=header):
                 self.assertEqual(gate.check([row('a.cpp'), *header], {'a.cpp'}), 1)
 
+    def test_included_sphlib_implementation_requires_extracted_functions(self):
+        name = 'Algorithms/extended/sphlib/md_helper.c'
+        for functions, expected in ((1, 0), (0, 1)):
+            with self.subTest(functions=functions):
+                self.assertEqual(gate.check([row(name, completed=0, functions=functions), self.header], {name}), expected)
+
     def test_invalid_input_fails(self):
         for rows, sources in (([], set()), ([row('a'), row('a')], {'a'}), ([row('a', crashed=-1)], {'a'})):
             with self.subTest(rows=rows), self.assertRaises(ValueError):

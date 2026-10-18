@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 #include "Coordinator.h"
+#include "ReportUI.h"
 #include "FileHashTask.h"
 #include "SumFileParser.h"
 #include "Exporter.h"
@@ -15,6 +16,7 @@
 #include "AdditionalHashVectors.h"
 #include "OfficialHashVectors.h"
 #include "StreamingHashVectors.h"
+#include "ExtendedHashVectors.h"
 
 static void check(bool ok, const char* message) {
   if (!ok) throw std::runtime_error(message);
@@ -112,14 +114,16 @@ static FileSumList parse(const std::string& text) {
 static std::vector<uint8_t> digest(const LegacyHashAlgorithm& algorithm, std::string_view input, size_t chunk) {
   auto context = algorithm.MakeContext();
   check(context.IsInitialized(), "initialize algorithm");
+  context.Update(nullptr, 0);
   for (size_t offset = 0; offset < input.size(); offset += chunk)
     context.Update(input.data() + offset, std::min(chunk, input.size() - offset));
-  std::vector<uint8_t> out(algorithm.GetSize() + 16, 0xA5);
-  context.Finish(out.data());
+  context.Update(nullptr, 0);
+  std::vector<uint8_t> out(algorithm.GetSize() + 32, 0xA5);
+  context.Finish(out.data() + 16);
   check(context.GetOutputSize() == algorithm.GetSize(), "digest size");
-  check(std::all_of(out.begin() + algorithm.GetSize(), out.end(), [](auto v) { return v == 0xA5; }), "digest buffer guard");
-  out.resize(algorithm.GetSize());
-  return out;
+  check(std::all_of(out.begin(), out.begin() + 16, [](auto v) { return v == 0xA5; }) &&
+      std::all_of(out.begin() + 16 + algorithm.GetSize(), out.end(), [](auto v) { return v == 0xA5; }), "digest buffer guards");
+  return {out.begin() + 16, out.end() - 16};
 }
 static void hashing() {
   check(!LegacyHashAlgorithm::ByName("SHA-1")->IsSecure(), "SHA-1 is not collision resistant");
@@ -178,7 +182,8 @@ static void hashing() {
   for (const auto& algorithm : LegacyHashAlgorithm::Algorithms()) {
     const auto name = std::string_view(algorithm.GetName());
     check(std::any_of(std::begin(vectors), std::end(vectors), [&](const auto& v) { return name == v.name; }) ||
-        std::any_of(std::begin(official_vectors), std::end(official_vectors), [&](const auto& v) { return name == v.name; }),
+        std::any_of(std::begin(official_vectors), std::end(official_vectors), [&](const auto& v) { return name == v.name; }) ||
+        std::any_of(std::begin(extended_vectors), std::end(extended_vectors), [&](const auto& v) { return name == v.name; }),
         "every registered algorithm needs a known-answer vector");
     for (size_t size : {size_t(0), size_t(1), size_t(63), size_t(64), size_t(65), size_t(8191), size_t(8192), size_t(8193), data.size()}) {
       const auto input = std::string_view(data).substr(0, size);
@@ -218,6 +223,30 @@ static void streaming_hash_vectors() {
   }
   std::printf("PASS: %zu published xxHash, BLAKE2sp, BLAKE3 and K12 vectors, three streaming patterns each\n", std::size(streaming_vectors));
 }
+static void extended_hash_vectors() {
+  for (const auto& vector : extended_vectors) {
+    const auto algorithm = LegacyHashAlgorithm::ByName(vector.name);
+    check(algorithm != nullptr, vector.name);
+    const std::string hex(vector.input_hex);
+    std::string input;
+    for (size_t i = 0; i < hex.size(); i += 2)
+      input.push_back(static_cast<char>(std::stoul(hex.substr(i, 2), nullptr, 16)));
+    const auto expected = utl::HashStringToBytes(std::string_view(vector.expected));
+    for (const size_t chunk : {size_t(1), size_t(7), size_t(31), size_t(127), size_t(8192)})
+      check(digest(*algorithm, input, chunk) == expected, vector.name);
+  }
+  for (const auto& vector : extended_long_vectors) {
+    const auto algorithm = LegacyHashAlgorithm::ByName(vector.name);
+    check(algorithm != nullptr, vector.name);
+    std::string input(vector.size, '\0');
+    for (size_t i = 0; i < input.size(); ++i) input[i] = static_cast<char>(i % 251);
+    const auto expected = utl::HashStringToBytes(std::string_view(vector.expected));
+    for (const size_t chunk : {size_t(127), size_t(8192), size_t(8193), input.size()})
+      check(digest(*algorithm, input, chunk) == expected, vector.name);
+  }
+  std::printf("PASS: %zu extended hash vectors and %zu large RFC 9861 vectors\n",
+      std::size(extended_vectors), std::size(extended_long_vectors));
+}
 static void large_hash_updates() {
   // One 512 MiB + 17 byte update overflowed size_t * 8 in x86 builds.
   // Independent hashlib/cSHAKE reference values are described in HashVectors.md.
@@ -247,8 +276,10 @@ static void parsers() {
   for (auto invalid : {"", "A", "AAA", "AA Z", "GG", "  A "})
     check(utl::HashStringToBytes(std::string_view(invalid)).empty(), "invalid hex rejected");
   check(utl::HashStringToBytes(std::string_view(" AA bb 00 ")) == std::vector<uint8_t>({170, 187, 0}), "spaced hex");
-  check(utl::HashStringToBytes(std::string_view(std::string(132, 'a'))).size() == 66, "maximum hash length");
-  check(utl::HashStringToBytes(std::string_view(std::string(134, 'a'))).empty(), "oversize hash rejected");
+  check(utl::HashStringToBytes(std::string_view(std::string(LegacyHashAlgorithm::k_max_size * 2, 'a'))).size() ==
+      LegacyHashAlgorithm::k_max_size, "maximum hash length");
+  check(utl::HashStringToBytes(std::string_view(std::string((LegacyHashAlgorithm::k_max_size + 1) * 2, 'a'))).empty(),
+      "oversize hash rejected");
   check(utl::FindHashInString(std::wstring(1000, L'A')).empty(), "long clipboard hash rejected");
   const auto mixed_case_hash = std::vector<uint8_t>({0xab, 0x12, 0xcd, 0xef});
   for (const auto text : {L"ab12cdef", L"AB12CDEF", L"aB12CdEf", L"aB 12 Cd Ef",
@@ -328,6 +359,17 @@ static void file_hashing() {
   coordinator.AddFiles();
   coordinator.ProcessFiles();
   coordinator.WaitForCompletion();
+  const auto computed_report = VerificationReport(coordinator, {});
+  check(computed_report.size() == LegacyHashAlgorithm::k_count, "report contains every computed algorithm");
+  for (const auto& row : computed_report)
+    check(row.status == oht::ResultStatus::Computed && row.expected.empty() && !row.actual.empty(), "computed report fields");
+  const auto check_hash = digest(*LegacyHashAlgorithm::ByName("SHA-256"), "abc", 1);
+  const auto checked_report = VerificationReport(coordinator, check_hash);
+  bool checked_sha256 = false;
+  for (const auto& row : checked_report) if (row.algorithm == "SHA-256") {
+    checked_sha256 = row.status == oht::ResultStatus::Match && row.actual == row.expected;
+  }
+  check(checked_sha256, "report preserves GUI check-against value");
   for (const auto& task : coordinator.GetFiles()) {
     check(task->GetError() == ERROR_SUCCESS, "async Unicode file hash");
     for (const auto& algorithm : LegacyHashAlgorithm::Algorithms())
@@ -417,8 +459,23 @@ static void file_hashing() {
       check(task->GetError() == ERROR_SUCCESS, "checksum target read");
       check(task->GetMatchState() == (matches ? static_cast<int>(LegacyHashAlgorithm::ByName("SHA-256")->Idx()) :
           FileHashTask::MatchState_Mismatch), "checksum match/mismatch classification");
+      const auto report = VerificationReport(verify, {});
+      const auto sha = std::find_if(report.begin(), report.end(), [](const auto& row) { return row.algorithm == "SHA-256"; });
+      check(sha != report.end() && sha->status == (matches ? oht::ResultStatus::Match : oht::ResultStatus::Mismatch) &&
+          !sha->expected.empty() && !sha->actual.empty(), "verification report match/mismatch fields");
     }
   }
+
+  write(checksum_file, std::string(64, '0') + " *missing-report-target.bin\n");
+  Coordinator failed_report({checksum_file.wstring()});
+  failed_report.settings.hash_sumfile_too.SetNoSave(false);
+  failed_report.AddFiles();
+  failed_report.ProcessFiles();
+  failed_report.WaitForCompletion();
+  const auto failed_rows = VerificationReport(failed_report, {});
+  check(failed_rows.size() == 1 && failed_rows[0].algorithm == "SHA-256" && failed_rows[0].expected == std::string(64, '0') &&
+      failed_rows[0].actual.empty() && failed_rows[0].status == oht::ResultStatus::Error && !failed_rows[0].error.empty(),
+      "unreadable file report retains expected algorithm and hash");
 
   Coordinator cancelled({file.wstring()});
   cancelled.AddFiles();
@@ -554,6 +611,7 @@ int main() {
     hashing();
     official_hash_vectors();
     streaming_hash_vectors();
+    extended_hash_vectors();
     large_hash_updates();
     ed2k_boundaries();
     parsers();

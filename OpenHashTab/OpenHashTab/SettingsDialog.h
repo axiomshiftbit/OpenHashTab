@@ -43,6 +43,9 @@ class SettingsDialog {
 
   void UpdateCheckboxAvailability();
   void UpdateColorItems();
+  void UpdateAlgorithmList();
+  void UpdateAlgorithmDescription();
+  void ApplyAlgorithmPreset(int preset);
 
 public:
   SettingsDialog(HWND handle, void* settings)

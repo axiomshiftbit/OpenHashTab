@@ -151,7 +151,7 @@ namespace utl {
 
   std::wstring SaveDialog(HWND hwnd, const wchar_t* defpath, const wchar_t* defname);
 
-  DWORD SaveMemoryAsFile(const wchar_t* path, const void* p, DWORD size);
+  DWORD SaveMemoryAsFile(const wchar_t* path, const void* p, size_t size);
 
   std::wstring UTF8ToWide(const char* p);
   std::string WideToUTF8(const wchar_t* p);

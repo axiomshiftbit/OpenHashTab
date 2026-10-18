@@ -16,7 +16,7 @@ OpenHashTab is a shell extension for conveniently calculating and checking file 
 
 ## Features
 
-* Support for 36 algorithms, see **Algorithms**
+* Support for 61 algorithms, see **Algorithms**
 * High performance hash calculation
 * Native Windows looks
 * High DPI screen support
@@ -27,6 +27,10 @@ OpenHashTab is a shell extension for conveniently calculating and checking file 
 * Hash export to file or clipboard (Supported: \*sum output, corz .hash, SFV)
 * Optional context menu option for faster access
 * File associations and standalone mode
+* File/folder comparison with matches, differences and missing entries
+* CSV/JSON verification reports and a scriptable command-line executable
+* Byte progress, average speed and estimated remaining time
+* Algorithm search, descriptions and selection presets
 
 \* to the extent Windows and configuration supports it. [Enable long paths](https://www.tenforums.com/tutorials/51704-enable-disable-win32-long-paths-windows-10-a.html) on 1607+ for better support.
 
@@ -65,7 +69,7 @@ Add a `DWORD` named `ForceDisableVT` to `HKEY_LOCAL_MACHINE\SOFTWARE\OpenHashTab
 * xxHash3 (64 and 128 bit variants)
 * MD4, MD5
 * RipeMD160
-* Blake2sp
+* Blake2sp, BLAKE2b (256/512 bit), BLAKE2s (256 bit)
 * SHA-1
 * SHA-2 (SHA-224, SHA-256, SHA-384, SHA-512)
 * SHA-512/224, SHA-512/256
@@ -76,12 +80,30 @@ Add a `DWORD` named `ForceDisableVT` to `HKEY_LOCAL_MACHINE\SOFTWARE\OpenHashTab
 * ParallelHash128 (264 bit) and ParallelHash256 (528 bit)
 * Streebog (GOST R 34.11-12) (256 bit, 512 bit)
 * BelT (`belt-hash`, 256 bit)
+* Ascon-Hash256, Ascon-XOF128-256, Ascon-CXOF128-256
+* KT256-512, TurboSHAKE128-256, TurboSHAKE256-512
+* Kupyna-256, Kupyna-384, Kupyna-512
+* Skein-256-256, Skein-512-256, Skein-512-512, Skein-1024-1024
+* Grøstl (Groestl-224/256/384/512)
+* JH-224, JH-256, JH-384, JH-512
+* Whirlpool (final 2003 revision)
+* eD2k, eD2k (Old), QuickXorHash
 
 Для новой проверки целостности используйте SHA-256/512, SHA-3 или BLAKE3. MD4, MD5, SHA-1 и eD2k сохранены для совместимости и не обеспечивают стойкость к коллизиям. CRC, xxHash и QuickXorHash не являются криптографическими хешами. RIPEMD-160 ограничен примерно 80 битами общей стойкости к коллизиям. Длина результата не всегда равна уровню безопасности: вывод BLAKE3 или KangarooTwelve длиной 512 бит не превращает их в алгоритмы с 256-битной стойкостью к коллизиям.
 
 SHA-512/224 и SHA-512/256 используют собственные начальные значения по FIPS 180-4. В названиях SHAKE128-256 и SHAKE256-512 число после дефиса означает длину результата. Белорусский `belt-hash` реализован библиотекой [Bee2](https://github.com/agievich/bee2) по СТБ 34.101.31; авторство Bee2 и лицензия Apache-2.0 сохранены. Стрибог уже присутствовал в проекте под названиями `GOST 2012 (256)` и `GOST 2012 (512)`.
 
 Спецификации и происхождение эталонных данных описаны в [документации тестов](tests/HashVectors.md). Наличие алгоритма в программе и прохождение тестов не являются криптографической сертификацией.
+
+Ascon использует окончательный NIST SP 800-232; варианты XOF/CXOF выдают 256 бит, строка настройки CXOF пустая. Для KT256-512 также используется пустая строка настройки; для TurboSHAKE — домен `0x1F`. BLAKE2b-256 задаёт длину при инициализации и не является усечением BLAKE2b-512. В имени Skein первое число обозначает размер состояния, второе — результата; используется последовательный режим без ключа. Прежний K12-512 и новый KT256-512 дают разные результаты.
+
+Исходники и параметры новых реализаций перечислены в [Algorithms/extended/README.md](Algorithms/extended/README.md), происхождение 6 998 обычных и 12 больших эталонных примеров — в [ExtendedHashVectors.md](tests/ExtendedHashVectors.md). Алгоритмы для совместимости остаются доступными; поиск и набор «Рекомендуемые» помогают выбрать SHA-256 и BLAKE3 без включения всех алгоритмов.
+
+## Сравнение, отчёты и командная строка
+
+Кнопка «Сравнить…» открывает сравнение двух файлов или папок. Для папок показываются совпадения, различия, отсутствующие файлы и пустые каталоги; результат можно сохранить в CSV или JSON. Кнопка «Отчёт проверки…» сохраняет результат текущего окна, включая ожидаемые и вычисленные суммы и ошибки чтения.
+
+Установщик также содержит `OpenHashTabCLI.exe` с командами `hash`, `verify`, `compare` и `algorithms`. Подробные примеры, ограничения, форматы отчётов и коды возврата приведены в [руководстве](docs/Usage.md).
 
 ## Download
 
@@ -129,11 +151,11 @@ All original code in this repo is licensed under the following license, unless e
     You should have received a copy of the GNU General Public License
     along with OpenHashTab.  If not, see <https://www.gnu.org/licenses/>.
 
-This software also contains or uses code from other sources; see [InstallerLicense.rtf](Setup/InstallerLicense.rtf), the [Bee2 license](Algorithms/bee2/bee2/LICENSE.txt) and [Bee2 authors](Algorithms/bee2/bee2/AUTHORS.md). The Bee2 notices are also included in the installer and release-candidate archive.
+This software also contains or uses code from other sources; see [InstallerLicense.rtf](Setup/InstallerLicense.rtf), the [Bee2 license](Algorithms/bee2/bee2/LICENSE.txt) and [Bee2 authors](Algorithms/bee2/bee2/AUTHORS.md). The Bee2 notices are also included in the installer and release-candidate archive. Notices for BLAKE2, Ascon, sphlib, Kupyna and Skein are included as separate license files; see [source provenance](Algorithms/extended/README.md).
 
 ## Сборка и проверка
 
-Версия пакетов задаётся в файле `VERSION`. Сборка выполняется командой `pwsh ./build_all.ps1` на Windows с Visual Studio C++, Clang, CMake, Ninja, .NET SDK и Windows SDK/WDK 10.0.26100.0. Требуется PowerShell 7.3 или новее. Перед сборкой необходимо загрузить подмодули: `git submodule update --init --recursive`. Параметр `-Compiler MSVC` выбирает компилятор Microsoft для C/C++; Clang остаётся необходим для ассемблерных файлов BLAKE3 и ресурсов.
+Версия пакетов задаётся в файле `VERSION`. Сборка выполняется командой `pwsh ./build_all.ps1` на Windows с Visual Studio C++, Clang, CMake, Ninja, Python 3, .NET SDK и Windows SDK/WDK 10.0.26100.0. Требуется PowerShell 7.3 или новее. Перед сборкой необходимо загрузить подмодули: `git submodule update --init --recursive`. Параметр `-Compiler MSVC` выбирает компилятор Microsoft для C/C++; Clang остаётся необходим для ассемблерных файлов BLAKE3 и ресурсов.
 
 В этой версии исправлен расчёт ParallelHash (`PH128-264`, `PH256-528`): исходный код передавал длину в байтах в функцию, ожидающую биты. Ранее сохранённые суммы этих двух алгоритмов для непустых файлов могли быть неверными; их необходимо пересчитать по доверенным исходным файлам. Также исправлена обработка нескольких блоков eD2k за один вызов обновления контекста.
 
@@ -141,7 +163,7 @@ GitHub Actions собирает варианты x86, x64 и ARM64, запуск
 
 В Windows 11 классический пункт контекстного меню доступен через «Показать дополнительные параметры». Расширение также предоставляет вкладку в свойствах файла и отдельное приложение `StandaloneStub.exe`.
 
-Проверка зависимостей через [OSV](https://osv.dev/) выполняется при сборке и еженедельно. Она проверяет закреплённые коммиты подмодулей и Actions, версии пакетов WiX/NuGet, а после восстановления пакетов — также транзитивные зависимости NuGet. При недоступности базы проверка завершается ошибкой. Локальный запуск: `python3 automation/Check-Vulnerabilities.py`; после сборки — с параметром `--assets`. Отсутствие совпадений в базе не гарантирует отсутствия уязвимостей.
+Проверка зависимостей через [OSV](https://osv.dev/) выполняется при сборке и еженедельно. Она проверяет закреплённые коммиты подмодулей, Actions и встроенных копий BLAKE2, Ascon, sphlib и Kupyna, версии пакетов WiX/NuGet, а после восстановления пакетов — также транзитивные зависимости NuGet. При недоступности базы проверка завершается ошибкой. Локальный запуск: `python3 automation/Check-Vulnerabilities.py`; после сборки — с параметром `--assets`. Архив Skein 1.3 не имеет идентификатора Git/пакета для запроса OSV: автоматическая проверка явно сообщает об этом ограничении. Отсутствие совпадений в базе не гарантирует отсутствия уязвимостей.
 
 Дополнительно параметр `--nvd` сверяет старую Mbed TLS с [NVD](https://nvd.nist.gov/). Проверка показывает известные CVE библиотеки, даже если затронутые TLS, X.509, RSA и другие модули не входят в эту сборку. Исключения привязаны к точному коммиту, списку исходников и конфигурации хеш-функций; новая CVE или изменение этих входных данных требует повторного анализа и останавливает проверку. Mbed TLS не используется для HTTPS: сетевые функции приложения используют Windows WinHTTP.
 

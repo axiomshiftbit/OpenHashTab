@@ -16,6 +16,7 @@
 #pragma once
 #include "path.h"
 #include "Settings.h"
+#include "Progress.h"
 
 class FileHashTask;
 
@@ -58,6 +59,8 @@ public:
   const std::list<std::unique_ptr<FileHashTask>>& GetFiles() const { return _file_tasks; }
 
   bool IsSumfile() const { return _is_sumfile; }
+  int GetSumfileAlgorithm() const { return _files.sumfile_type; }
+  oht::ProgressSnapshot GetProgress() const { return {_size_progressed.load(), _size_total}; }
 
   std::pair<std::wstring, std::wstring> GetSumfileDefaultSavePathAndBaseName();
 

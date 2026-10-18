@@ -195,6 +195,24 @@
         </ComponentGroup>
 
         <ComponentGroup Id="Executables" Directory="INSTALLDIR">
+            <Component Id="CommandLine">
+                <File Id="OpenHashTabCLI.exe" Source="$(var.BuildDirectory)\OpenHashTabCLI.exe" KeyPath="yes" />
+            </Component>
+            <Component Id="Blake2License">
+                <File Id="Blake2License.txt" Name="BLAKE2-LICENSE.txt" Source="..\Algorithms\extended\blake2\COPYING" KeyPath="yes" />
+            </Component>
+            <Component Id="AsconLicense">
+                <File Id="AsconLicense.txt" Name="Ascon-LICENSE.txt" Source="..\Algorithms\extended\ascon\LICENSE" KeyPath="yes" />
+            </Component>
+            <Component Id="SphlibLicense">
+                <File Id="SphlibLicense.txt" Name="sphlib-LICENSE.txt" Source="..\Algorithms\extended\sphlib\LICENSE" KeyPath="yes" />
+            </Component>
+            <Component Id="KupynaLicense">
+                <File Id="KupynaLicense.txt" Name="Kupyna-LICENSE.txt" Source="..\Algorithms\extended\kupyna\LICENSE" KeyPath="yes" />
+            </Component>
+            <Component Id="SkeinLicense">
+                <File Id="SkeinLicense.txt" Name="Skein-LICENSE.txt" Source="..\Algorithms\extended\skein\LICENSE" KeyPath="yes" />
+            </Component>
             <Component Id="Bee2License">
                 <File Id="Bee2License.txt" Name="Bee2-LICENSE.txt"
                     Source="..\Algorithms\bee2\bee2\LICENSE.txt" KeyPath="yes" />
@@ -581,6 +599,181 @@
                             Argument='"%1"' />
                     </Extension>
                 </ProgId>
+                <ProgId Id='OpenHashTab.blake2b-256' Description='blake2b-256 Sum File'
+                    Icon="StandaloneStub.exe" IconIndex="0">
+                    <Extension Id='blake2b-256' ContentType='application/x-blake2b-256sum'>
+                        <Verb Id='open' Command='Open' TargetFile='StandaloneStub.exe'
+                            Argument='"%1"' />
+                    </Extension>
+                </ProgId>
+                <ProgId Id='OpenHashTab.blake2b-512' Description='blake2b-512 Sum File'
+                    Icon="StandaloneStub.exe" IconIndex="0">
+                    <Extension Id='blake2b-512' ContentType='application/x-blake2b-512sum'>
+                        <Verb Id='open' Command='Open' TargetFile='StandaloneStub.exe'
+                            Argument='"%1"' />
+                    </Extension>
+                </ProgId>
+                <ProgId Id='OpenHashTab.blake2s-256' Description='blake2s-256 Sum File'
+                    Icon="StandaloneStub.exe" IconIndex="0">
+                    <Extension Id='blake2s-256' ContentType='application/x-blake2s-256sum'>
+                        <Verb Id='open' Command='Open' TargetFile='StandaloneStub.exe'
+                            Argument='"%1"' />
+                    </Extension>
+                </ProgId>
+                <ProgId Id='OpenHashTab.ascon-hash256' Description='ascon-hash256 Sum File'
+                    Icon="StandaloneStub.exe" IconIndex="0">
+                    <Extension Id='ascon-hash256' ContentType='application/x-ascon-hash256sum'>
+                        <Verb Id='open' Command='Open' TargetFile='StandaloneStub.exe'
+                            Argument='"%1"' />
+                    </Extension>
+                </ProgId>
+                <ProgId Id='OpenHashTab.ascon-xof128-256' Description='ascon-xof128-256 Sum File'
+                    Icon="StandaloneStub.exe" IconIndex="0">
+                    <Extension Id='ascon-xof128-256' ContentType='application/x-ascon-xof128-256sum'>
+                        <Verb Id='open' Command='Open' TargetFile='StandaloneStub.exe'
+                            Argument='"%1"' />
+                    </Extension>
+                </ProgId>
+                <ProgId Id='OpenHashTab.ascon-cxof128-256' Description='ascon-cxof128-256 Sum File'
+                    Icon="StandaloneStub.exe" IconIndex="0">
+                    <Extension Id='ascon-cxof128-256' ContentType='application/x-ascon-cxof128-256sum'>
+                        <Verb Id='open' Command='Open' TargetFile='StandaloneStub.exe'
+                            Argument='"%1"' />
+                    </Extension>
+                </ProgId>
+                <ProgId Id='OpenHashTab.kt256-512' Description='kt256-512 Sum File'
+                    Icon="StandaloneStub.exe" IconIndex="0">
+                    <Extension Id='kt256-512' ContentType='application/x-kt256-512sum'>
+                        <Verb Id='open' Command='Open' TargetFile='StandaloneStub.exe'
+                            Argument='"%1"' />
+                    </Extension>
+                </ProgId>
+                <ProgId Id='OpenHashTab.turboshake128-256' Description='turboshake128-256 Sum File'
+                    Icon="StandaloneStub.exe" IconIndex="0">
+                    <Extension Id='turboshake128-256' ContentType='application/x-turboshake128-256sum'>
+                        <Verb Id='open' Command='Open' TargetFile='StandaloneStub.exe'
+                            Argument='"%1"' />
+                    </Extension>
+                </ProgId>
+                <ProgId Id='OpenHashTab.turboshake256-512' Description='turboshake256-512 Sum File'
+                    Icon="StandaloneStub.exe" IconIndex="0">
+                    <Extension Id='turboshake256-512' ContentType='application/x-turboshake256-512sum'>
+                        <Verb Id='open' Command='Open' TargetFile='StandaloneStub.exe'
+                            Argument='"%1"' />
+                    </Extension>
+                </ProgId>
+                <ProgId Id='OpenHashTab.kupyna-256' Description='kupyna-256 Sum File'
+                    Icon="StandaloneStub.exe" IconIndex="0">
+                    <Extension Id='kupyna-256' ContentType='application/x-kupyna-256sum'>
+                        <Verb Id='open' Command='Open' TargetFile='StandaloneStub.exe'
+                            Argument='"%1"' />
+                    </Extension>
+                </ProgId>
+                <ProgId Id='OpenHashTab.kupyna-384' Description='kupyna-384 Sum File'
+                    Icon="StandaloneStub.exe" IconIndex="0">
+                    <Extension Id='kupyna-384' ContentType='application/x-kupyna-384sum'>
+                        <Verb Id='open' Command='Open' TargetFile='StandaloneStub.exe'
+                            Argument='"%1"' />
+                    </Extension>
+                </ProgId>
+                <ProgId Id='OpenHashTab.kupyna-512' Description='kupyna-512 Sum File'
+                    Icon="StandaloneStub.exe" IconIndex="0">
+                    <Extension Id='kupyna-512' ContentType='application/x-kupyna-512sum'>
+                        <Verb Id='open' Command='Open' TargetFile='StandaloneStub.exe'
+                            Argument='"%1"' />
+                    </Extension>
+                </ProgId>
+                <ProgId Id='OpenHashTab.skein-256-256' Description='skein-256-256 Sum File'
+                    Icon="StandaloneStub.exe" IconIndex="0">
+                    <Extension Id='skein-256-256' ContentType='application/x-skein-256-256sum'>
+                        <Verb Id='open' Command='Open' TargetFile='StandaloneStub.exe'
+                            Argument='"%1"' />
+                    </Extension>
+                </ProgId>
+                <ProgId Id='OpenHashTab.skein-512-256' Description='skein-512-256 Sum File'
+                    Icon="StandaloneStub.exe" IconIndex="0">
+                    <Extension Id='skein-512-256' ContentType='application/x-skein-512-256sum'>
+                        <Verb Id='open' Command='Open' TargetFile='StandaloneStub.exe'
+                            Argument='"%1"' />
+                    </Extension>
+                </ProgId>
+                <ProgId Id='OpenHashTab.skein-512-512' Description='skein-512-512 Sum File'
+                    Icon="StandaloneStub.exe" IconIndex="0">
+                    <Extension Id='skein-512-512' ContentType='application/x-skein-512-512sum'>
+                        <Verb Id='open' Command='Open' TargetFile='StandaloneStub.exe'
+                            Argument='"%1"' />
+                    </Extension>
+                </ProgId>
+                <ProgId Id='OpenHashTab.skein-1024-1024' Description='skein-1024-1024 Sum File'
+                    Icon="StandaloneStub.exe" IconIndex="0">
+                    <Extension Id='skein-1024-1024' ContentType='application/x-skein-1024-1024sum'>
+                        <Verb Id='open' Command='Open' TargetFile='StandaloneStub.exe'
+                            Argument='"%1"' />
+                    </Extension>
+                </ProgId>
+                <ProgId Id='OpenHashTab.groestl-224' Description='groestl-224 Sum File'
+                    Icon="StandaloneStub.exe" IconIndex="0">
+                    <Extension Id='groestl-224' ContentType='application/x-groestl-224sum'>
+                        <Verb Id='open' Command='Open' TargetFile='StandaloneStub.exe'
+                            Argument='"%1"' />
+                    </Extension>
+                </ProgId>
+                <ProgId Id='OpenHashTab.groestl-256' Description='groestl-256 Sum File'
+                    Icon="StandaloneStub.exe" IconIndex="0">
+                    <Extension Id='groestl-256' ContentType='application/x-groestl-256sum'>
+                        <Verb Id='open' Command='Open' TargetFile='StandaloneStub.exe'
+                            Argument='"%1"' />
+                    </Extension>
+                </ProgId>
+                <ProgId Id='OpenHashTab.groestl-384' Description='groestl-384 Sum File'
+                    Icon="StandaloneStub.exe" IconIndex="0">
+                    <Extension Id='groestl-384' ContentType='application/x-groestl-384sum'>
+                        <Verb Id='open' Command='Open' TargetFile='StandaloneStub.exe'
+                            Argument='"%1"' />
+                    </Extension>
+                </ProgId>
+                <ProgId Id='OpenHashTab.groestl-512' Description='groestl-512 Sum File'
+                    Icon="StandaloneStub.exe" IconIndex="0">
+                    <Extension Id='groestl-512' ContentType='application/x-groestl-512sum'>
+                        <Verb Id='open' Command='Open' TargetFile='StandaloneStub.exe'
+                            Argument='"%1"' />
+                    </Extension>
+                </ProgId>
+                <ProgId Id='OpenHashTab.jh-224' Description='jh-224 Sum File'
+                    Icon="StandaloneStub.exe" IconIndex="0">
+                    <Extension Id='jh-224' ContentType='application/x-jh-224sum'>
+                        <Verb Id='open' Command='Open' TargetFile='StandaloneStub.exe'
+                            Argument='"%1"' />
+                    </Extension>
+                </ProgId>
+                <ProgId Id='OpenHashTab.jh-256' Description='jh-256 Sum File'
+                    Icon="StandaloneStub.exe" IconIndex="0">
+                    <Extension Id='jh-256' ContentType='application/x-jh-256sum'>
+                        <Verb Id='open' Command='Open' TargetFile='StandaloneStub.exe'
+                            Argument='"%1"' />
+                    </Extension>
+                </ProgId>
+                <ProgId Id='OpenHashTab.jh-384' Description='jh-384 Sum File'
+                    Icon="StandaloneStub.exe" IconIndex="0">
+                    <Extension Id='jh-384' ContentType='application/x-jh-384sum'>
+                        <Verb Id='open' Command='Open' TargetFile='StandaloneStub.exe'
+                            Argument='"%1"' />
+                    </Extension>
+                </ProgId>
+                <ProgId Id='OpenHashTab.jh-512' Description='jh-512 Sum File'
+                    Icon="StandaloneStub.exe" IconIndex="0">
+                    <Extension Id='jh-512' ContentType='application/x-jh-512sum'>
+                        <Verb Id='open' Command='Open' TargetFile='StandaloneStub.exe'
+                            Argument='"%1"' />
+                    </Extension>
+                </ProgId>
+                <ProgId Id='OpenHashTab.whirlpool' Description='whirlpool Sum File'
+                    Icon="StandaloneStub.exe" IconIndex="0">
+                    <Extension Id='whirlpool' ContentType='application/x-whirlpoolsum'>
+                        <Verb Id='open' Command='Open' TargetFile='StandaloneStub.exe'
+                            Argument='"%1"' />
+                    </Extension>
+                </ProgId>
                 <!-- corz checksum -->
                 <ProgId Id='OpenHashTab.hash' Description='Checksum File' Icon="StandaloneStub.exe"
                     IconIndex="0">
@@ -714,8 +907,85 @@
                 <RegistryValue Root="HKCR" Key=".belt-hash\OpenWithProgids"
                     Name="OpenHashTab.belt-hash" Value="" Type="string" />
 
+                <RegistryValue Root="HKCR" Key=".blake2b-256\OpenWithProgids"
+                    Name="OpenHashTab.blake2b-256" Value="" Type="string" />
+                <RegistryValue Root="HKCR" Key=".blake2b-512\OpenWithProgids"
+                    Name="OpenHashTab.blake2b-512" Value="" Type="string" />
+                <RegistryValue Root="HKCR" Key=".blake2s-256\OpenWithProgids"
+                    Name="OpenHashTab.blake2s-256" Value="" Type="string" />
+                <RegistryValue Root="HKCR" Key=".ascon-hash256\OpenWithProgids"
+                    Name="OpenHashTab.ascon-hash256" Value="" Type="string" />
+                <RegistryValue Root="HKCR" Key=".ascon-xof128-256\OpenWithProgids"
+                    Name="OpenHashTab.ascon-xof128-256" Value="" Type="string" />
+                <RegistryValue Root="HKCR" Key=".ascon-cxof128-256\OpenWithProgids"
+                    Name="OpenHashTab.ascon-cxof128-256" Value="" Type="string" />
+                <RegistryValue Root="HKCR" Key=".kt256-512\OpenWithProgids"
+                    Name="OpenHashTab.kt256-512" Value="" Type="string" />
+                <RegistryValue Root="HKCR" Key=".turboshake128-256\OpenWithProgids"
+                    Name="OpenHashTab.turboshake128-256" Value="" Type="string" />
+                <RegistryValue Root="HKCR" Key=".turboshake256-512\OpenWithProgids"
+                    Name="OpenHashTab.turboshake256-512" Value="" Type="string" />
+                <RegistryValue Root="HKCR" Key=".kupyna-256\OpenWithProgids"
+                    Name="OpenHashTab.kupyna-256" Value="" Type="string" />
+                <RegistryValue Root="HKCR" Key=".kupyna-384\OpenWithProgids"
+                    Name="OpenHashTab.kupyna-384" Value="" Type="string" />
+                <RegistryValue Root="HKCR" Key=".kupyna-512\OpenWithProgids"
+                    Name="OpenHashTab.kupyna-512" Value="" Type="string" />
+                <RegistryValue Root="HKCR" Key=".skein-256-256\OpenWithProgids"
+                    Name="OpenHashTab.skein-256-256" Value="" Type="string" />
+                <RegistryValue Root="HKCR" Key=".skein-512-256\OpenWithProgids"
+                    Name="OpenHashTab.skein-512-256" Value="" Type="string" />
+                <RegistryValue Root="HKCR" Key=".skein-512-512\OpenWithProgids"
+                    Name="OpenHashTab.skein-512-512" Value="" Type="string" />
+                <RegistryValue Root="HKCR" Key=".skein-1024-1024\OpenWithProgids"
+                    Name="OpenHashTab.skein-1024-1024" Value="" Type="string" />
+                <RegistryValue Root="HKCR" Key=".groestl-224\OpenWithProgids"
+                    Name="OpenHashTab.groestl-224" Value="" Type="string" />
+                <RegistryValue Root="HKCR" Key=".groestl-256\OpenWithProgids"
+                    Name="OpenHashTab.groestl-256" Value="" Type="string" />
+                <RegistryValue Root="HKCR" Key=".groestl-384\OpenWithProgids"
+                    Name="OpenHashTab.groestl-384" Value="" Type="string" />
+                <RegistryValue Root="HKCR" Key=".groestl-512\OpenWithProgids"
+                    Name="OpenHashTab.groestl-512" Value="" Type="string" />
+                <RegistryValue Root="HKCR" Key=".jh-224\OpenWithProgids"
+                    Name="OpenHashTab.jh-224" Value="" Type="string" />
+                <RegistryValue Root="HKCR" Key=".jh-256\OpenWithProgids"
+                    Name="OpenHashTab.jh-256" Value="" Type="string" />
+                <RegistryValue Root="HKCR" Key=".jh-384\OpenWithProgids"
+                    Name="OpenHashTab.jh-384" Value="" Type="string" />
+                <RegistryValue Root="HKCR" Key=".jh-512\OpenWithProgids"
+                    Name="OpenHashTab.jh-512" Value="" Type="string" />
+                <RegistryValue Root="HKCR" Key=".whirlpool\OpenWithProgids"
+                    Name="OpenHashTab.whirlpool" Value="" Type="string" />
+
                 <RegistryKey Root="HKCR" Key="Applications\StandaloneStub.exe">
                     <RegistryValue Name="FriendlyAppName" Value="OpenHashTab" Type="string" />
+                    <RegistryValue Key="SupportedTypes" Name=".blake2b-256" Value="" Type="string" />
+                    <RegistryValue Key="SupportedTypes" Name=".blake2b-512" Value="" Type="string" />
+                    <RegistryValue Key="SupportedTypes" Name=".blake2s-256" Value="" Type="string" />
+                    <RegistryValue Key="SupportedTypes" Name=".ascon-hash256" Value="" Type="string" />
+                    <RegistryValue Key="SupportedTypes" Name=".ascon-xof128-256" Value="" Type="string" />
+                    <RegistryValue Key="SupportedTypes" Name=".ascon-cxof128-256" Value="" Type="string" />
+                    <RegistryValue Key="SupportedTypes" Name=".kt256-512" Value="" Type="string" />
+                    <RegistryValue Key="SupportedTypes" Name=".turboshake128-256" Value="" Type="string" />
+                    <RegistryValue Key="SupportedTypes" Name=".turboshake256-512" Value="" Type="string" />
+                    <RegistryValue Key="SupportedTypes" Name=".kupyna-256" Value="" Type="string" />
+                    <RegistryValue Key="SupportedTypes" Name=".kupyna-384" Value="" Type="string" />
+                    <RegistryValue Key="SupportedTypes" Name=".kupyna-512" Value="" Type="string" />
+                    <RegistryValue Key="SupportedTypes" Name=".skein-256-256" Value="" Type="string" />
+                    <RegistryValue Key="SupportedTypes" Name=".skein-512-256" Value="" Type="string" />
+                    <RegistryValue Key="SupportedTypes" Name=".skein-512-512" Value="" Type="string" />
+                    <RegistryValue Key="SupportedTypes" Name=".skein-1024-1024" Value="" Type="string" />
+                    <RegistryValue Key="SupportedTypes" Name=".groestl-224" Value="" Type="string" />
+                    <RegistryValue Key="SupportedTypes" Name=".groestl-256" Value="" Type="string" />
+                    <RegistryValue Key="SupportedTypes" Name=".groestl-384" Value="" Type="string" />
+                    <RegistryValue Key="SupportedTypes" Name=".groestl-512" Value="" Type="string" />
+                    <RegistryValue Key="SupportedTypes" Name=".jh-224" Value="" Type="string" />
+                    <RegistryValue Key="SupportedTypes" Name=".jh-256" Value="" Type="string" />
+                    <RegistryValue Key="SupportedTypes" Name=".jh-384" Value="" Type="string" />
+                    <RegistryValue Key="SupportedTypes" Name=".jh-512" Value="" Type="string" />
+                    <RegistryValue Key="SupportedTypes" Name=".whirlpool" Value="" Type="string" />
+
 
                     <RegistryValue Key="SupportedTypes" Name=".sha512-224" Value="" Type="string" />
                     <RegistryValue Key="SupportedTypes" Name=".sha512-256" Value="" Type="string" />
@@ -813,6 +1083,9 @@
         <?endif?>
 
         <ComponentGroup Id="Pdb" Directory="INSTALLDIR">
+            <Component Id="CommandLinePdb">
+                <File Id="OpenHashTabCLI.pdb" Source="$(var.BuildDirectory)\OpenHashTabCLI.pdb" KeyPath="yes" />
+            </Component>
             <Component Id="BenchmarkPdb">
                 <File Id="Benchmark.pdb" Source="$(var.BuildDirectory)\Benchmark.pdb" KeyPath="yes" />
             </Component>

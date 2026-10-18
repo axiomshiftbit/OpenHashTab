@@ -38,10 +38,15 @@ if os.environ.get("BUILD_RUN"):
 with zipfile.ZipFile(output / f"OpenHashTab-{version}-Windows11-candidate.zip", "w", zipfile.ZIP_DEFLATED) as archive:
     for path in installers:
         archive.write(path, path.name)
-    for name in ("COPYING", "README.md"):
+    for name in ("COPYING", "README.md", "docs/Usage.md"):
         archive.write(root / name, name)
     for name in ("LICENSE.txt", "AUTHORS.md"):
         archive.write(root / "Algorithms/bee2/bee2" / name, "Bee2-" + name)
+    for directory, filename, destination in (
+            ("blake2", "COPYING", "BLAKE2-LICENSE.txt"), ("ascon", "LICENSE", "Ascon-LICENSE.txt"),
+            ("sphlib", "LICENSE", "sphlib-LICENSE.txt"), ("kupyna", "LICENSE", "Kupyna-LICENSE.txt"),
+            ("skein", "LICENSE", "Skein-LICENSE.txt")):
+        archive.write(root / "Algorithms/extended" / directory / filename, destination)
     archive.writestr("BUILD.json", json.dumps(metadata, indent=2) + "\n")
     archive.writestr("SHA256SUMS.txt", "".join(f"{digest}  {name}\n" for name, digest in metadata["installers"].items()))
 

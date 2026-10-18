@@ -4,6 +4,7 @@ project(XKCP)
 
 set(CMAKE_C_STANDARD 11)
 include(PatchSP800185.cmake)
+include(PatchAlignment.cmake)
 
 set(COMMON_FILES
         XKCP/lib/high/KangarooTwelve/KangarooTwelve.c
@@ -27,7 +28,7 @@ set(ARM64_FILES
         XKCP/lib/low/KeccakP-200/ref/KeccakP-200-reference.c
         XKCP/lib/low/KeccakP-400/ref/KeccakP-400-reference.c
         XKCP/lib/low/KeccakP-800/plain/KeccakP-800-opt32.c
-        XKCP/lib/low/KeccakP-1600/plain-64bits/KeccakP-1600-opt64.c
+        ${KECCAK_ALIGNMENT_SOURCE}
         XKCP/lib/low/KeccakP-1600-times2/fallback-on1/KeccakP-1600-times2-on1.c
         XKCP/lib/low/KeccakP-1600-times4/fallback-on1/KeccakP-1600-times4-on1.c
         XKCP/lib/low/KeccakP-1600-times8/fallback-on1/KeccakP-1600-times8-on1.c
@@ -43,7 +44,7 @@ set(AVX2_FILES
         XKCP/lib/low/KeccakP-200/ref/KeccakP-200-reference.c
         XKCP/lib/low/KeccakP-400/ref/KeccakP-400-reference.c
         XKCP/lib/low/KeccakP-800/plain/KeccakP-800-opt32.c
-        XKCP/lib/low/KeccakP-1600/plain-64bits/KeccakP-1600-opt64.c
+        ${KECCAK_ALIGNMENT_SOURCE}
         XKCP/lib/low/KeccakP-1600-times2/SIMD128/KeccakP-1600-times2-SIMD128.c
         XKCP/lib/low/KeccakP-1600-times4/AVX2/KeccakP-1600-times4-SIMD256.c
         XKCP/lib/low/KeccakP-1600-times8/fallback-on4/KeccakP-1600-times8-on4.c
@@ -75,7 +76,7 @@ set(GENERIC_FILES
         XKCP/lib/low/KeccakP-200/ref/KeccakP-200-reference.c
         XKCP/lib/low/KeccakP-400/ref/KeccakP-400-reference.c
         XKCP/lib/low/KeccakP-800/plain/KeccakP-800-opt32.c
-        XKCP/lib/low/KeccakP-1600/plain-64bits/KeccakP-1600-opt64.c
+        ${KECCAK_ALIGNMENT_SOURCE}
         XKCP/lib/low/KeccakP-1600-times2/fallback-on1/KeccakP-1600-times2-on1.c
         XKCP/lib/low/KeccakP-1600-times4/fallback-on1/KeccakP-1600-times4-on1.c
         XKCP/lib/low/KeccakP-1600-times8/fallback-on1/KeccakP-1600-times8-on1.c

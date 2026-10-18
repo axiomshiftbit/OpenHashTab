@@ -63,6 +63,9 @@ function(lang_json_to_include JSON DEFAULT_JSON OUT_VAR)
     set(${OUT_VAR} "${RESULT}" PARENT_SCOPE)
 endfunction()
 
+# Native Windows command lines may pass backslashes. GLOB's generated
+# VerifyGlobs.cmake must contain CMake paths, without escape sequences like \U.
+file(TO_CMAKE_PATH "${OHT_LOCALES_DIR}" OHT_LOCALES_DIR)
 file(GLOB LOCALES CONFIGURE_DEPENDS "${OHT_LOCALES_DIR}/*.json")
 if(NOT LOCALES)
     message(FATAL_ERROR "No GUI translations found in OHT_LOCALES_DIR")

@@ -142,6 +142,7 @@ public:
   const hash_results_t& GetHashResult() const { return _hash_results; }
 
   const std::wstring& GetDisplayName() const { return _file_info.relative_path; }
+  const std::list<std::vector<uint8_t>>& GetExpectedHashes() const { return _file_info.expected_hashes; }
 
   enum : int {
     MatchState_None = -1,

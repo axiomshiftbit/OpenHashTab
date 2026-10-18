@@ -107,6 +107,74 @@ void SettingsDialog::UpdateColorItems() {
   }
 }
 
+void SettingsDialog::UpdateAlgorithmDescription() {
+  const auto list = _hwnd_ALGORITHM_LIST;
+  const auto selected = ListView_GetNextItem(list, -1, LVNI_SELECTED);
+  LVITEMW item{};
+  item.mask = LVIF_PARAM;
+  item.iItem = selected;
+  if (selected < 0 || !ListView_GetItem(list, &item) || !item.lParam) {
+    utl::SetWindowTextStringFromTable(GetDlgItem(_hwnd, IDC_ALGORITHM_DESCRIPTION), IDS_ALGORITHM_NO_RESULTS);
+    return;
+  }
+  const auto& algorithm = *reinterpret_cast<const LegacyHashAlgorithm*>(item.lParam);
+  const std::string_view name = algorithm.GetName();
+  const auto noncrypto = name.starts_with("CRC") || name.starts_with("XXH") || name == "QuickXorHash";
+  const auto category = noncrypto ? IDS_ALGORITHM_NONCRYPTO :
+      algorithm.IsSecure() ? IDS_ALGORITHM_CRYPTO : IDS_ALGORITHM_LEGACY;
+  UINT note{};
+  if (name.starts_with("Ascon-CXOF") || name.starts_with("KT256")) note = IDS_ALGORITHM_EMPTY_CUSTOM;
+  else if (name.starts_with("Ascon")) note = IDS_ALGORITHM_ASCON;
+  else if (name.starts_with("TurboSHAKE")) note = IDS_ALGORITHM_TURBOSHAKE;
+  else if (name.starts_with("K12")) note = IDS_ALGORITHM_K12;
+  else if (name.starts_with("Skein")) note = IDS_ALGORITHM_SKEIN;
+  else if (name == "Whirlpool") note = IDS_ALGORITHM_WHIRLPOOL;
+  else if (name.starts_with("SHAKE") || name.starts_with("PH") || name.starts_with("BLAKE3")) note = IDS_ALGORITHM_XOF;
+  auto description = utl::FormatString(utl::GetString(IDS_ALGORITHM_DESCRIPTION).c_str(),
+      utl::UTF8ToWide(algorithm.GetName()).c_str(), algorithm.GetSize() * 8u, utl::GetString(category).c_str());
+  if (note) description += L"\n" + utl::GetString(note);
+  SetWindowTextW(GetDlgItem(_hwnd, IDC_ALGORITHM_DESCRIPTION), description.c_str());
+}
+
+void SettingsDialog::UpdateAlgorithmList() {
+  const auto list = _hwnd_ALGORITHM_LIST;
+  const auto filter = utl::GetWindowTextString(GetDlgItem(_hwnd, IDC_ALGORITHM_SEARCH));
+  const auto was_setup = _done_setup;
+  _done_setup = false; // Deleting/inserting rows also raises LVN_ITEMCHANGED.
+  SendMessageW(list, WM_SETREDRAW, FALSE, 0);
+  ListView_DeleteAllItems(list);
+  for (const auto& algorithm : LegacyHashAlgorithm::Algorithms()) {
+    const auto name = utl::UTF8ToWide(algorithm.GetName());
+    if (!filter.empty() && !StrStrIW(name.c_str(), filter.c_str())) continue;
+    LVITEMW item{};
+    item.mask = LVIF_PARAM | LVIF_TEXT;
+    item.iItem = INT_MAX;
+    item.pszText = const_cast<LPWSTR>(name.c_str());
+    item.lParam = reinterpret_cast<LPARAM>(&algorithm);
+    const auto index = ListView_InsertItem(list, &item);
+    ListView_SetCheckState(list, index, _settings->algorithms[algorithm.Idx()]);
+  }
+  if (ListView_GetItemCount(list)) ListView_SetItemState(list, 0, LVIS_SELECTED | LVIS_FOCUSED, LVIS_SELECTED | LVIS_FOCUSED);
+  ListView_SetColumnWidth(list, 0, LVSCW_AUTOSIZE);
+  SendMessageW(list, WM_SETREDRAW, TRUE, 0);
+  InvalidateRect(list, nullptr, TRUE);
+  _done_setup = was_setup;
+  UpdateAlgorithmDescription();
+}
+
+void SettingsDialog::ApplyAlgorithmPreset(int preset) {
+  if (preset <= 0 || preset > 4) return;
+  // A preset replaces the complete selection, including rows hidden by search.
+  for (const auto& algorithm : LegacyHashAlgorithm::Algorithms()) {
+    const std::string_view name = algorithm.GetName();
+    const auto enabled = preset == 3 ||
+        (preset == 1 && (name == "SHA-256" || name == "BLAKE3")) ||
+        (preset == 2 && (name == "MD5" || name == "SHA-1" || name == "SHA-256" || name == "SHA-512"));
+    _settings->algorithms[algorithm.Idx()].Set(enabled);
+  }
+  UpdateAlgorithmList();
+}
+
 INT_PTR SettingsDialog::DlgProc(UINT uMsg, WPARAM wParam, LPARAM lParam) {
   const auto pnmhdr = (LPNMHDR)lParam;
   switch (uMsg) {
@@ -136,25 +204,18 @@ INT_PTR SettingsDialog::DlgProc(UINT uMsg, WPARAM wParam, LPARAM lParam) {
 
     const auto list = _hwnd_ALGORITHM_LIST;
     ListView_SetExtendedListViewStyleEx(list, LVS_EX_CHECKBOXES, LVS_EX_CHECKBOXES);
-    auto width = 0;
-    for (const auto& algorithm : LegacyHashAlgorithm::Algorithms()) {
-      const auto name = utl::UTF8ToWide(algorithm.GetName());
-      width = std::max(width, ListView_GetStringWidth(list, name.c_str()));
-      LVITEMW lvitem{
-        LVIF_PARAM,
-        INT_MAX,
-        0,
-        0,
-        0,
-        const_cast<LPWSTR>(L"")};
-      lvitem.lParam = reinterpret_cast<LPARAM>(&algorithm);
-      const auto item = ListView_InsertItem(list, &lvitem);
-      ListView_SetItemText(list, item, 0, const_cast<LPWSTR>(name.c_str()));
-      ListView_SetCheckState(list, item, _settings->algorithms[algorithm.Idx()]);
-    }
-
-    // let's hope 40 px padding is good enough
-    ListView_SetColumnWidth(list, 0, (intptr_t)width + utl::GetDPIScaledPixels(list, 40));
+    LVCOLUMNW column{};
+    column.mask = LVCF_FMT;
+    column.fmt = LVCFMT_LEFT;
+    ListView_InsertColumn(list, 0, &column);
+    utl::SetWindowTextStringFromTable(GetDlgItem(_hwnd, IDC_STATIC_ALGORITHM_SEARCH), IDS_ALGORITHM_SEARCH);
+    utl::SetWindowTextStringFromTable(GetDlgItem(_hwnd, IDC_STATIC_ALGORITHM_PRESET), IDS_ALGORITHM_PRESET);
+    SendDlgItemMessageW(_hwnd, IDC_ALGORITHM_SEARCH, EM_SETLIMITTEXT, 128, 0);
+    const auto presets = GetDlgItem(_hwnd, IDC_ALGORITHM_PRESET);
+    for (const auto id : {IDS_PRESET_CUSTOM, IDS_PRESET_RECOMMENDED, IDS_PRESET_COMPATIBILITY, IDS_PRESET_ALL, IDS_PRESET_NONE})
+      ComboBox_AddString(presets, utl::GetString(id).c_str());
+    ComboBox_SetCurSel(presets, 0);
+    UpdateAlgorithmList();
 
     for (const auto& ctl : s_boxes) {
       const auto ctl_hwnd = GetDlgItem(_hwnd, ctl.control_id);
@@ -171,6 +232,14 @@ INT_PTR SettingsDialog::DlgProc(UINT uMsg, WPARAM wParam, LPARAM lParam) {
   case WM_COMMAND: {
     const auto id = LOWORD(wParam);
     const auto code = HIWORD(wParam);
+    if (_done_setup && id == IDC_ALGORITHM_SEARCH && code == EN_CHANGE) {
+      UpdateAlgorithmList();
+      return TRUE;
+    }
+    if (_done_setup && id == IDC_ALGORITHM_PRESET && code == CBN_SELCHANGE) {
+      ApplyAlgorithmPreset(ComboBox_GetCurSel(GetDlgItem(_hwnd, IDC_ALGORITHM_PRESET)));
+      return TRUE;
+    }
     if (code == BN_CLICKED && (id == IDOK || id == IDCANCEL)) {
       EndDialog(_hwnd, LOWORD(wParam));
       return TRUE;
@@ -244,14 +313,19 @@ INT_PTR SettingsDialog::DlgProc(UINT uMsg, WPARAM wParam, LPARAM lParam) {
     if (pnmhdr->idFrom == IDC_ALGORITHM_LIST && pnmhdr->code == LVN_ITEMCHANGED && _done_setup) {
       const auto pnmlv = reinterpret_cast<LPNMLISTVIEW>(lParam);
       const auto idx = pnmlv->iItem;
+      if (idx < 0 || !(pnmlv->uChanged & LVIF_STATE)) break;
       const auto list = pnmhdr->hwndFrom;
       const auto check = static_cast<bool>(ListView_GetCheckState(list, idx));
       LVITEMW lvitem{
         LVIF_PARAM,
         static_cast<int>(idx)};
-      ListView_GetItem(list, &lvitem);
+      if (!ListView_GetItem(list, &lvitem) || !lvitem.lParam) break;
       const auto algorithm = reinterpret_cast<const LegacyHashAlgorithm*>(lvitem.lParam);
-      _settings->algorithms[algorithm->Idx()].Set(check);
+      if ((pnmlv->uOldState ^ pnmlv->uNewState) & LVIS_STATEIMAGEMASK) {
+        _settings->algorithms[algorithm->Idx()].Set(check);
+        ComboBox_SetCurSel(GetDlgItem(_hwnd, IDC_ALGORITHM_PRESET), 0);
+      }
+      UpdateAlgorithmDescription();
       return TRUE;
     } else if (pnmhdr->idFrom == IDC_PROJECT_LINK && (pnmhdr->code == NM_CLICK || pnmhdr->code == NM_RETURN)) {
       const auto pnmlink = (PNMLINK)pnmhdr;

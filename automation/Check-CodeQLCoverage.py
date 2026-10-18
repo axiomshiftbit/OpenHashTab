@@ -22,6 +22,13 @@ def check(rows, sources):
     if not sources:
         raise ValueError('No tracked C/C++ sources found')
     for source in sorted(sources):
+        # sphlib deliberately includes this implementation template from its
+        # hash translation unit. It must contain extracted functions, but must
+        # not be compiled as an independent C source.
+        if source == 'Algorithms/extended/sphlib/md_helper.c':
+            if not files.get(source, {}).get('functions'):
+                failures.append(f'{source}: no extracted functions from included implementation')
+            continue
         if not files.get(source, {}).get('completed') or not files.get(source, {}).get('parsed'):
             failures.append(f'{source}: no completed source extraction')
     # The JSON adapter is shared by both network entry points and is header-only.

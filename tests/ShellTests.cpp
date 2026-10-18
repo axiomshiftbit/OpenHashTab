@@ -8,8 +8,10 @@
 #include <cstdio>
 #include <string>
 #include <cstring>
+#include <cwchar>
 #include <vector>
 #include "../OpenHashTab/OpenHashTab/resource.h"
+#include "../OpenHashTab/LegacyAlgorithms/Hasher.h"
 
 static bool ok(HRESULT result, const char* operation) {
   if (FAILED(result)) std::fprintf(stderr, "FAIL: %s (0x%08lx)\n", operation, static_cast<unsigned long>(result));
@@ -47,7 +49,7 @@ static bool localized_resources(HMODULE module) {
   for (const auto language : languages) {
     english |= language == MAKELANGID(LANG_ENGLISH, SUBLANG_ENGLISH_US);
     russian |= language == MAKELANGID(LANG_RUSSIAN, SUBLANG_RUSSIAN_RUSSIA);
-    for (UINT id = IDS_ALGORITHM; id <= IDS_SUMMARY; ++id) {
+    for (UINT id = IDS_ALGORITHM; id <= IDS_LAST; ++id) {
       if (resource_string(module, language, id).empty()) {
         std::fprintf(stderr, "FAIL: empty GUI string %u in language 0x%04x\n", id, language);
         return false;
@@ -56,7 +58,7 @@ static bool localized_resources(HMODULE module) {
   }
   if (!english || !russian || resource_string(module, 0x409, IDS_HASHES) != L"Hashes" ||
       resource_string(module, 0x419, IDS_HASHES) != L"\u0425\u044d\u0448\u0438") return false;
-  std::printf("PASS: 55 nonempty GUI strings in each of %zu compiled languages; English and Russian captions\n", languages.size());
+  std::printf("PASS: %u nonempty GUI strings in each of %zu compiled languages; English and Russian captions\n", IDS_LAST - IDS_ALGORITHM + 1, languages.size());
   return true;
 }
 static BOOL CALLBACK add_page(HPROPSHEETPAGE page, LPARAM result) {
@@ -104,6 +106,99 @@ static BOOL CALLBACK find_settings(HWND window, LPARAM result) {
   }
   return TRUE;
 }
+static bool settings_options_aligned(HWND window) {
+  const int options[] = {
+    IDC_CHECK_DISPLAY_UPPERCASE, IDC_CHECK_DISPLAY_MONOSPACE, IDC_CHECK_LOOK_FOR_SUMFILES,
+    IDC_CHECK_SUMFILE_UPPERCASE, IDC_CHECK_SUMFILE_UNIX_ENDINGS, IDC_CHECK_SUMFILE_USE_DOUBLE_SPACE,
+    IDC_CHECK_SUMFILE_FORWARD_SLASHES, IDC_CHECK_SUMFILE_DOT_HASH_COMPATIBLE, IDC_CHECK_SUMFILE_BANNER,
+    IDC_CHECK_SUMFILE_BANNER_DATE, IDC_CHECK_CLIPBOARD_AUTOENABLE, IDC_CHECK_CLIPBOARD_AUTOENABLE_IF_NONE,
+    IDC_CHECK_CLIPBOARD_AUTOENABLE_EXCLUSIVE, IDC_CHECK_CHECKAGAINST_AUTOFORMAT, IDC_CHECK_CHECKAGAINST_STRICT,
+    IDC_CHECK_HASH_SUMFILE_TOO, IDC_CHECK_SUMFILE_ALGORITHM_ONLY,
+  };
+  RECT first{};
+  if (!GetWindowRect(GetDlgItem(window, options[0]), &first)) return false;
+  for (const auto id : options) {
+    RECT rectangle{};
+    if (!GetWindowRect(GetDlgItem(window, id), &rectangle) || rectangle.left != first.left ||
+        rectangle.right != first.right) {
+      std::fprintf(stderr, "FAIL: settings checkbox %d is misaligned\n", id);
+      return false;
+    }
+  }
+  return true;
+}
+static bool settings_algorithm_controls(HWND window) {
+  const auto list = GetDlgItem(window, IDC_ALGORITHM_LIST);
+  const auto search = GetDlgItem(window, IDC_ALGORITHM_SEARCH);
+  const auto presets = GetDlgItem(window, IDC_ALGORITHM_PRESET);
+  const auto description = GetDlgItem(window, IDC_ALGORITHM_DESCRIPTION);
+  if (!search || !presets || !description || ListView_GetItemCount(list) != LegacyHashAlgorithm::k_count) return false;
+  std::vector<bool> saved;
+  for (int i = 0; i < LegacyHashAlgorithm::k_count; ++i) saved.push_back(ListView_GetCheckState(list, i) != FALSE);
+  bool passed = SendMessageW(presets, CB_GETCOUNT, 0, 0) == 5;
+  RECT client{};
+  GetClientRect(list, &client);
+  for (int i = 0; i < LegacyHashAlgorithm::k_count; ++i) {
+    ListView_SetItemState(list, i, LVIS_SELECTED | LVIS_FOCUSED, LVIS_SELECTED | LVIS_FOCUSED);
+    ListView_EnsureVisible(list, i, FALSE);
+    RECT row{};
+    passed &= ListView_GetItemRect(list, i, &row, LVIR_BOUNDS) != FALSE &&
+        row.top >= 0 && row.bottom <= client.bottom;
+    wchar_t text[1024]{};
+    GetWindowTextW(description, text, 1024);
+    passed &= text[0] != 0;
+    RECT area{};
+    GetClientRect(description, &area);
+    RECT measured = area;
+    const auto dc = GetDC(description);
+    if (dc) {
+      const auto old_font = SelectObject(dc, reinterpret_cast<HFONT>(SendMessageW(description, WM_GETFONT, 0, 0)));
+      DrawTextW(dc, text, -1, &measured, DT_CALCRECT | DT_WORDBREAK | DT_NOPREFIX);
+      passed &= measured.bottom <= area.bottom;
+      SelectObject(dc, old_font);
+      ReleaseDC(description, dc);
+    } else passed = false;
+  }
+  SetWindowTextW(search, L"sHa-512/");
+  passed &= ListView_GetItemCount(list) == 2;
+  wchar_t selected_name[128]{};
+  ListView_GetItemText(list, 0, 0, selected_name, 128);
+  const bool old_check = ListView_GetCheckState(list, 0) != FALSE;
+  ListView_SetCheckState(list, 0, !old_check);
+  SetWindowTextW(search, L"");
+  passed &= ListView_GetItemCount(list) == LegacyHashAlgorithm::k_count;
+  bool found = false;
+  for (int i = 0; i < ListView_GetItemCount(list); ++i) {
+    wchar_t name[128]{};
+    ListView_GetItemText(list, i, 0, name, 128);
+    if (std::wcscmp(name, selected_name) == 0) {
+      found = true;
+      passed &= (ListView_GetCheckState(list, i) != FALSE) != old_check;
+    }
+  }
+  passed &= found;
+  SetWindowTextW(search, L"no-such-algorithm");
+  passed &= ListView_GetItemCount(list) == 0 && GetWindowTextLengthW(description) > 0;
+  for (const auto preset : {4, 3, 1, 2}) {
+    // Applying a preset while all rows are hidden must still affect all algorithms.
+    SendMessageW(presets, CB_SETCURSEL, preset, 0);
+    SendMessageW(window, WM_COMMAND, MAKEWPARAM(IDC_ALGORITHM_PRESET, CBN_SELCHANGE), reinterpret_cast<LPARAM>(presets));
+    SetWindowTextW(search, L"");
+    for (int i = 0; i < ListView_GetItemCount(list); ++i) {
+      wchar_t name[128]{};
+      ListView_GetItemText(list, i, 0, name, 128);
+      const std::wstring n(name);
+      const bool expected = preset == 3 || (preset == 1 && (n == L"SHA-256" || n == L"BLAKE3")) ||
+          (preset == 2 && (n == L"MD5" || n == L"SHA-1" || n == L"SHA-256" || n == L"SHA-512"));
+      passed &= (ListView_GetCheckState(list, i) != FALSE) == expected;
+    }
+    SetWindowTextW(search, L"no-such-algorithm");
+  }
+  SetWindowTextW(search, L"");
+  for (int i = 0; i < LegacyHashAlgorithm::k_count; ++i) ListView_SetCheckState(list, i, saved[i]);
+  if (!passed) std::fputs("FAIL: algorithm search, presets, description layout or scrolling\n", stderr);
+  return passed;
+}
 static void CALLBACK inspect_settings(HWND, UINT, UINT_PTR timer, DWORD) {
   KillTimer(nullptr, timer);
   HWND window{};
@@ -121,8 +216,9 @@ static void CALLBACK inspect_settings(HWND, UINT, UINT_PTR timer, DWORD) {
     IDC_MISMATCH_GROUP, IDC_MISMATCH_FG_CHECK, IDC_MISMATCH_BG_CHECK,
     IDC_INSECURE_GROUP, IDC_INSECURE_FG_CHECK, IDC_INSECURE_BG_CHECK,
     IDC_ERROR_GROUP, IDC_ERROR_FG_CHECK, IDC_ERROR_BG_CHECK,
+    IDC_STATIC_ALGORITHM_SEARCH, IDC_STATIC_ALGORITHM_PRESET, IDC_ALGORITHM_DESCRIPTION,
   };
-  settings_checked = GetWindowTextLengthW(window) > 0;
+  settings_checked = GetWindowTextLengthW(window) > 0 && settings_options_aligned(window);
   RECT client{};
   GetClientRect(window, &client);
   for (const auto id : labels) {
@@ -137,7 +233,7 @@ static void CALLBACK inspect_settings(HWND, UINT, UINT_PTR timer, DWORD) {
     }
   }
   const auto list = GetDlgItem(window, IDC_ALGORITHM_LIST);
-  if (ListView_GetItemCount(list) != 36) settings_checked = false;
+  if (ListView_GetItemCount(list) != LegacyHashAlgorithm::k_count) settings_checked = false;
   const auto main_list = GetDlgItem(GetWindow(window, GW_OWNER), IDC_HASH_LIST);
   const auto algorithm_width = ListView_GetColumnWidth(main_list, 1);
   for (int index = 0; index < ListView_GetItemCount(list); ++index) {
@@ -149,11 +245,77 @@ static void CALLBACK inspect_settings(HWND, UINT, UINT_PTR timer, DWORD) {
       settings_checked = false;
     }
   }
+  settings_checked &= settings_algorithm_controls(window);
   EndDialog(window, IDCANCEL);
 }
 static void CALLBACK close_menu(HWND, UINT, UINT_PTR timer, DWORD) {
   menu_closed = EndMenu() != FALSE;
   KillTimer(nullptr, timer);
+}
+static bool comparison_checked = false;
+static unsigned comparison_polls = 0;
+static bool comparison_started = false;
+static BOOL CALLBACK find_comparison(HWND window, LPARAM result) {
+  if (GetDlgItem(window, IDC_COMPARE_RESULTS)) {
+    *reinterpret_cast<HWND*>(result) = window;
+    return FALSE;
+  }
+  return TRUE;
+}
+static void CALLBACK inspect_comparison(HWND, UINT, UINT_PTR timer, DWORD) {
+  HWND window{};
+  EnumThreadWindows(GetCurrentThreadId(), find_comparison, reinterpret_cast<LPARAM>(&window));
+  if (!window) {
+    if (++comparison_polls > 200) KillTimer(nullptr, timer);
+    return;
+  }
+  if (++comparison_polls > 200) {
+    comparison_checked = false;
+    KillTimer(nullptr, timer);
+    SendMessageW(window, WM_CLOSE, 0, 0);
+    return;
+  }
+  if (!comparison_started) {
+    comparison_started = true;
+    comparison_checked = GetWindowTextLengthW(window) > 0;
+    RECT client{};
+    GetClientRect(window, &client);
+    for (const auto id : {IDC_COMPARE_LEFT_LABEL, IDC_COMPARE_RIGHT_LABEL, IDC_COMPARE_ALGORITHM_LABEL,
+        IDC_COMPARE_LEFT_FILE, IDC_COMPARE_LEFT_FOLDER, IDC_COMPARE_RIGHT_FILE, IDC_COMPARE_RIGHT_FOLDER,
+        IDC_COMPARE_START, IDC_COMPARE_CANCEL, IDC_COMPARE_JSON, IDC_COMPARE_CSV, IDCANCEL}) {
+      const auto control = GetDlgItem(window, id);
+      RECT rectangle{};
+      GetWindowRect(control, &rectangle);
+      MapWindowPoints(HWND_DESKTOP, window, reinterpret_cast<POINT*>(&rectangle), 2);
+      comparison_checked &= IsWindowVisible(control) && GetWindowTextLengthW(control) > 0 &&
+          rectangle.left >= 0 && rectangle.top >= 0 && rectangle.right <= client.right && rectangle.bottom <= client.bottom;
+    }
+    comparison_checked &= SendDlgItemMessageW(window, IDC_COMPARE_ALGORITHM, CB_GETCOUNT, 0, 0) == LegacyHashAlgorithm::k_count;
+    comparison_checked &= !IsWindowEnabled(GetDlgItem(window, IDC_COMPARE_CANCEL));
+    comparison_checked &= !IsWindowEnabled(GetDlgItem(window, IDC_COMPARE_JSON));
+    wchar_t file[32768]{};
+    comparison_checked &= GetModuleFileNameW(nullptr, file, 32768) != 0;
+    SetDlgItemTextW(window, IDC_COMPARE_LEFT, file);
+    SetDlgItemTextW(window, IDC_COMPARE_RIGHT, file);
+    SendDlgItemMessageW(window, IDC_COMPARE_START, BM_CLICK, 0, 0);
+    comparison_checked &= !IsWindowEnabled(GetDlgItem(window, IDC_COMPARE_LEFT)) &&
+        IsWindowEnabled(GetDlgItem(window, IDC_COMPARE_CANCEL));
+    return;
+  }
+  if (!IsWindowEnabled(GetDlgItem(window, IDC_COMPARE_START))) return;
+  const auto list = GetDlgItem(window, IDC_COMPARE_RESULTS);
+  comparison_checked &= ListView_GetItemCount(list) == 1;
+  wchar_t expected[257]{}, actual[257]{}, error[1024]{};
+  ListView_GetItemText(list, 0, 2, expected, 257);
+  ListView_GetItemText(list, 0, 3, actual, 257);
+  ListView_GetItemText(list, 0, 4, error, 1024);
+  comparison_checked &= std::wcslen(expected) == 64 && !std::wcscmp(expected, actual) && !error[0];
+  comparison_checked &= IsWindowEnabled(GetDlgItem(window, IDC_COMPARE_JSON)) &&
+      IsWindowEnabled(GetDlgItem(window, IDC_COMPARE_CSV)) && !IsWindowEnabled(GetDlgItem(window, IDC_COMPARE_CANCEL));
+  comparison_checked &= GetWindowTextLengthW(GetDlgItem(window, IDC_COMPARE_SUMMARY)) > 0 &&
+      GetWindowTextLengthW(GetDlgItem(window, IDC_COMPARE_PROGRESS)) > 0;
+  KillTimer(nullptr, timer);
+  EndDialog(window, IDCANCEL);
 }
 static bool window_and_popup_menus(IContextMenu* context) {
   CMINVOKECOMMANDINFO command{};
@@ -175,15 +337,15 @@ static bool window_and_popup_menus(IContextMenu* context) {
   }
   if (ListView_GetItemCount(list) == 0) return false;
   for (const auto id : {IDC_STATIC_CHECK_AGAINST, IDC_STATIC_EXPORT_TO, IDC_STATIC_PROCESSING,
-                       IDC_BUTTON_CLIPBOARD, IDC_BUTTON_EXPORT}) {
+                       IDC_BUTTON_CLIPBOARD, IDC_BUTTON_EXPORT, IDC_BUTTON_COMPARE, IDC_BUTTON_REPORT, IDC_PROGRESS_DETAILS}) {
     if (!GetWindowTextLengthW(GetDlgItem(window, id))) {
       std::fprintf(stderr, "FAIL: main GUI control %d has no localized caption\n", id);
       return false;
     }
   }
-  wchar_t algorithm[128]{}, hash[256]{}, result[512]{};
+  wchar_t algorithm[128]{}, hash[LegacyHashAlgorithm::k_max_size * 2 + 1]{}, result[512]{};
   ListView_GetItemText(list, 0, 1, algorithm, 128);
-  ListView_GetItemText(list, 0, 2, hash, 256);
+  ListView_GetItemText(list, 0, 2, hash, static_cast<int>(std::size(hash)));
   if (!algorithm[0] || !hash[0]) return false;
   for (int form = 0; form < 3; ++form) {
     for (size_t i = 0; hash[i]; ++i) {
@@ -205,6 +367,17 @@ static bool window_and_popup_menus(IContextMenu* context) {
       reinterpret_cast<LPARAM>(GetDlgItem(window, IDC_BUTTON_SETTINGS)));
   KillTimer(nullptr, settings_timer);
   if (!settings_checked) return false;
+  comparison_checked = false;
+  comparison_started = false;
+  comparison_polls = 0;
+  const auto comparison_timer = SetTimer(nullptr, 0, 50, inspect_comparison);
+  if (!comparison_timer) return false;
+  SendDlgItemMessageW(window, IDC_BUTTON_COMPARE, BM_CLICK, 0, 0);
+  KillTimer(nullptr, comparison_timer);
+  if (!comparison_checked) {
+    std::fputs("FAIL: comparison dialog controls, calculation or report state\n", stderr);
+    return false;
+  }
   DWORD before{};
   for (unsigned attempt = 0; attempt < 18; ++attempt) {
     // Warm up common-control resources before checking USER handle growth.

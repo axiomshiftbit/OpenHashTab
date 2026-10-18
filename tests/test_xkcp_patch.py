@@ -51,5 +51,28 @@ class CheckedSourceCopy(unittest.TestCase):
                 self.assertIn(f"SP800-185.{extension} changed", result.stderr)
 
 
+class CheckedAlignmentCopy(unittest.TestCase):
+    def test_alignment_copy_is_line_ending_stable_and_rejects_source_changes(self):
+        source = pathlib.Path("XKCP/lib/low/KeccakP-1600/plain-64bits/KeccakP-1600-opt64.c")
+        with tempfile.TemporaryDirectory() as temporary:
+            root = pathlib.Path(temporary)
+            shutil.copyfile(ROOT / "PatchAlignment.cmake", root / "patch.cmake")
+            (root / source).parent.mkdir(parents=True)
+            original = (ROOT / source).read_bytes().replace(b"\r\n", b"\n")
+            command = ["cmake", f"-DKECCAK_ALIGNMENT_OUTPUT_DIR={root / 'output'}", "-P", str(root / "patch.cmake")]
+            results = []
+            for newline in (b"\n", b"\r\n"):
+                (root / source).write_bytes(original.replace(b"\n", newline))
+                result = subprocess.run(command, capture_output=True, text=True)
+                self.assertEqual(result.returncode, 0, result.stderr)
+                results.append((root / "output/KeccakP-1600-opt64.c").read_bytes())
+            self.assertEqual(results[0], results[1])
+            self.assertEqual(results[0].count(b"memcpy(aligned, input, laneCount*8)"), 2)
+            (root / source).write_bytes(original + b"/* changed */")
+            result = subprocess.run(command, capture_output=True, text=True)
+            self.assertNotEqual(result.returncode, 0)
+            self.assertIn("review the input alignment patch", result.stderr)
+
+
 if __name__ == "__main__":
     unittest.main()

@@ -12,6 +12,14 @@ spec.loader.exec_module(scanner)
 
 
 class VulnerabilityQueries(unittest.TestCase):
+    def test_vendored_hash_sources_are_queried(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            with patch.object(scanner, "ROOT", pathlib.Path(temporary)), patch.object(scanner.subprocess, "check_output", return_value=" " + "a" * 40 + " dependency\n"):
+                queries = scanner.dependencies()
+        commits = {query.get("commit") for query in queries.values()}
+        self.assertTrue(set(scanner.VENDORED_GIT.values()).issubset(commits))
+        self.assertEqual(len(scanner.VENDORED_GIT), 4)
+
     def test_restored_assets_include_wix_and_custom_build_paths(self):
         for directory in ("Setup/obj", "build/wix_Machine_x64"):
             with self.subTest(directory=directory), tempfile.TemporaryDirectory() as temporary:

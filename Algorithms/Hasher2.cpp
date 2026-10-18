@@ -34,6 +34,7 @@
 #include <blake3.h>
 #include <bee2/crypto/belt.h>
 #include "BeltHashState.h"
+#include "extended/ExtendedHash.h"
 extern "C" {
 #include "KeccakHash.h"
 #include "KangarooTwelve.h"
@@ -53,6 +54,9 @@ extern "C" {
 }
 
 class HashContext{};
+
+template <class State>
+class ExtendedHashContext final : public HashContext, public State {};
 
 template <
   typename Ctx,
@@ -931,6 +935,31 @@ constexpr HashAlgorithm k_algorithms[] = {
   make_algorithm<Sha512THashContext<224>>("SHA-512/224", true),
   make_algorithm<Sha512THashContext<256>>("SHA-512/256", true),
   make_algorithm<BeltHashContext>("belt-hash", true),
+  make_algorithm<ExtendedHashContext<oht::Blake2b<32>>>("BLAKE2b-256", true),
+  make_algorithm<ExtendedHashContext<oht::Blake2b<64>>>("BLAKE2b-512", true),
+  make_algorithm<ExtendedHashContext<oht::Blake2s>>("BLAKE2s-256", true),
+  make_algorithm<ExtendedHashContext<oht::Ascon<oht::AsconMode::Hash>>>("Ascon-Hash256", true),
+  make_algorithm<ExtendedHashContext<oht::Ascon<oht::AsconMode::Xof>>>("Ascon-XOF128-256", true),
+  make_algorithm<ExtendedHashContext<oht::Ascon<oht::AsconMode::Cxof>>>("Ascon-CXOF128-256", true),
+  make_algorithm<ExtendedHashContext<oht::Kt256>>("KT256-512", true),
+  make_algorithm<ExtendedHashContext<oht::TurboShake<128, 32>>>("TurboSHAKE128-256", true),
+  make_algorithm<ExtendedHashContext<oht::TurboShake<256, 64>>>("TurboSHAKE256-512", true),
+  make_algorithm<ExtendedHashContext<oht::Kupyna256>>("Kupyna-256", true),
+  make_algorithm<ExtendedHashContext<oht::Kupyna384>>("Kupyna-384", true),
+  make_algorithm<ExtendedHashContext<oht::Kupyna512>>("Kupyna-512", true),
+  make_algorithm<ExtendedHashContext<oht::Skein256_256>>("Skein-256-256", true),
+  make_algorithm<ExtendedHashContext<oht::Skein512_256>>("Skein-512-256", true),
+  make_algorithm<ExtendedHashContext<oht::Skein512_512>>("Skein-512-512", true),
+  make_algorithm<ExtendedHashContext<oht::Skein1024_1024>>("Skein-1024-1024", true),
+  make_algorithm<ExtendedHashContext<oht::Groestl224>>("Groestl-224", true),
+  make_algorithm<ExtendedHashContext<oht::Groestl256>>("Groestl-256", true),
+  make_algorithm<ExtendedHashContext<oht::Groestl384>>("Groestl-384", true),
+  make_algorithm<ExtendedHashContext<oht::Groestl512>>("Groestl-512", true),
+  make_algorithm<ExtendedHashContext<oht::Jh224>>("JH-224", true),
+  make_algorithm<ExtendedHashContext<oht::Jh256>>("JH-256", true),
+  make_algorithm<ExtendedHashContext<oht::Jh384>>("JH-384", true),
+  make_algorithm<ExtendedHashContext<oht::Jh512>>("JH-512", true),
+  make_algorithm<ExtendedHashContext<oht::Whirlpool>>("Whirlpool", true),
 };
 
 constexpr const HashAlgorithm* k_algorithms_begin = std::begin(k_algorithms);

@@ -59,8 +59,11 @@ try {
         foreach ($architecture in @('x86', 'x64')) {
             & "$root\binaries\oht-$architecture\Tests\CoreTests.exe"
             if ($LASTEXITCODE -ne 0) { throw "Core tests failed: $architecture" }
-            & "$root\binaries\oht-$architecture\Tests\EncodingTests.exe"
-            if ($LASTEXITCODE -ne 0) { throw "Encoding tests failed: $architecture" }
+            foreach ($test in @('EncodingTests', 'ExtendedHashTests', 'ReportTests', 'BatchTests')) {
+                & "$root\binaries\oht-$architecture\Tests\$test.exe"
+                if ($LASTEXITCODE -ne 0) { throw "$test failed: $architecture" }
+            }
+            & "$root\automation\Test-CLI.ps1" -Executable "$root\binaries\oht-$architecture\OpenHashTabCLI.exe"
         }
         & "$root\automation\Test-Install.ps1" -Stage BeforeReboot -Architecture x64
         Set-Content "$root\reboot-pending" $os.LastBootUpTime.ToUniversalTime().ToString('o')
