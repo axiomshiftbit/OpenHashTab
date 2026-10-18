@@ -31,6 +31,8 @@ if os.environ.get("BUILD_RUN"):
     metadata["build_run"] = int(os.environ["BUILD_RUN"])
     metadata["build_commit"] = os.environ["BUILD_COMMIT"]
     metadata["validation_run"] = int(os.environ["GITHUB_RUN_ID"])
+    if os.environ.get("ARTIFACT_RUN") and os.environ["ARTIFACT_RUN"] != os.environ["BUILD_RUN"]:
+        metadata["restored_artifact_run"] = int(os.environ["ARTIFACT_RUN"])
     if os.environ.get("PASSED_VM"):
         metadata["reused_windows_vm"] = json.loads(os.environ["PASSED_VM"])
 with zipfile.ZipFile(output / f"OpenHashTab-{version}-Windows11-candidate.zip", "w", zipfile.ZIP_DEFLATED) as archive:

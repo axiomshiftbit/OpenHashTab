@@ -1,13 +1,56 @@
 import importlib.util
+import hashlib
 import pathlib
+import tempfile
 import unittest
+import zipfile
 
 spec = importlib.util.spec_from_file_location("reuse", pathlib.Path(__file__).parents[1] / "automation/Check-ReusedBuild.py")
 reuse = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(reuse)
+spec = importlib.util.spec_from_file_location("restore", pathlib.Path(__file__).parents[1] / "automation/Restore-Artifacts.py")
+restore = importlib.util.module_from_spec(spec)
+spec.loader.exec_module(restore)
 
 
 class ReusedBuildTests(unittest.TestCase):
+    def test_recovery_preserves_bytes_and_rejects_changed_archive(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = pathlib.Path(directory)
+            archive = root / "saved.zip"
+            with zipfile.ZipFile(archive, "w") as output:
+                output.writestr("x64/program.exe", b"binary\0bytes\xff")
+            digest = hashlib.sha256(archive.read_bytes()).hexdigest()
+            restore.extract_verified(archive, digest, root / "valid")
+            self.assertEqual((root / "valid/x64/program.exe").read_bytes(), b"binary\0bytes\xff")
+            with self.assertRaises(ValueError):
+                restore.extract_verified(archive, "0" * 64, root / "invalid")
+            self.assertFalse((root / "invalid").exists())
+
+    def test_recovery_rejects_paths_and_symlinks(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = pathlib.Path(directory)
+            for name in ("../escape", "/absolute", "back\\slash", "symlink"):
+                with self.subTest(name=name):
+                    archive = root / "bad.zip"
+                    entry = zipfile.ZipInfo(name)
+                    if name == "symlink":
+                        entry.external_attr = 0o120777 << 16
+                    with zipfile.ZipFile(archive, "w") as output:
+                        output.writestr(entry, "payload")
+                    digest = hashlib.sha256(archive.read_bytes()).hexdigest()
+                    with self.assertRaises(ValueError):
+                        restore.extract_verified(archive, digest, root / "invalid")
+                    self.assertFalse((root / "invalid").exists())
+
+    def test_original_build_verdict_is_bound_to_run_and_commit(self):
+        commit = "a" * 40
+        log = "T   BUILD_RUN: 10\nT PASS: 6 successful prerequisite jobs; product/build inputs unchanged from " + commit + ".\n"
+        self.assertEqual(reuse.verified_original_commit(log, "10"), commit)
+        for changed in (log.replace("10", "11"), log.replace("6 successful", "5 successful"), log + log, log.replace(commit, "unknown")):
+            with self.assertRaises(ValueError):
+                reuse.verified_original_commit(changed, "10")
+
     def test_reused_vm_allows_only_replayed_classifier(self):
         before = "prefix\nfunction Get-WindowsRegistrySignature() { old }\nfunction Get-WindowsControlSignatures() {}"
         reuse.check_vm_paths(["automation/BehaviorEvents.ps1"], before, before.replace("old", "new"))

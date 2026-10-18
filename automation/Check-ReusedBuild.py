@@ -15,13 +15,63 @@ ALLOWED = {
     "automation/BehaviorEvents.ps1", "automation/Test-Behavior.ps1",
     "tests/Test-BehaviorEvents.ps1", "tests/test_reused_build.py", "tests/ShellTests.cpp",
     "automation/Test-ReusedRegistry.ps1",
+    ".github/workflows/restore-artifacts.yml", "automation/Restore-Artifacts.py",
 }
 VM_INFRA = {
     ".github/workflows/retest-windows11.yml", "automation/Check-ReusedBuild.py",
     "automation/Package.py", "automation/BehaviorEvents.ps1",
     "automation/Test-ReusedRegistry.ps1", "tests/Test-BehaviorEvents.ps1",
     "tests/test_reused_build.py",
+    ".github/workflows/restore-artifacts.yml", "automation/Restore-Artifacts.py",
 }
+
+
+def api(repository, path):
+    request = urllib.request.Request("https://api.github.com/repos/" + repository + path,
+        headers={"Authorization": "Bearer " + os.environ["GH_TOKEN"],
+                 "Accept": "application/vnd.github+json"})
+    with urllib.request.urlopen(request, timeout=60) as response:
+        return json.load(response)
+
+
+def get_jobs(repository, run_id):
+    result = []
+    for page in range(1, 101):
+        batch = api(repository, f"/actions/runs/{run_id}/jobs?per_page=100&page={page}")["jobs"]
+        result.extend(batch)
+        if len(batch) < 100:
+            return result
+    raise ValueError("Incomplete job list")
+
+
+def job_log(repository, job_id):
+    return subprocess.check_output(["gh", "api", f"repos/{repository}/actions/jobs/{job_id}/logs",
+                                    "--allow-escape-sequences"], text=True, encoding="utf-8").replace("\0", "")
+
+
+def check_retest_origin(run, repository):
+    if (run["repository"]["full_name"] != repository or run["status"] != "completed" or
+            run["path"] != ".github/workflows/retest-windows11.yml" or
+            run["event"] != "workflow_dispatch" or run["head_branch"] != "master"):
+        raise ValueError("Expected a completed trusted master retest")
+
+
+def verified_original_commit(log, original_run):
+    inputs = re.findall(r"^\S+ +BUILD_RUN: (\d+)$", log, re.M)
+    commits = re.findall(r"^\S+ PASS: 6 successful prerequisite jobs; product/build inputs unchanged from ([0-9a-f]{40})\.$", log, re.M)
+    if inputs != [str(original_run)] or len(commits) != 1:
+        raise ValueError("No unique successful verification of the original build")
+    return commits[0]
+
+
+def recoverable_build(repository, original_run, verification_run):
+    run = api(repository, "/actions/runs/" + str(verification_run))
+    check_retest_origin(run, repository)
+    jobs = get_jobs(repository, verification_run)
+    job = successful_job(jobs, "Verify unchanged product and completed prerequisites")
+    commit = verified_original_commit(job_log(repository, job["id"]), original_run)
+    subprocess.run(["git", "merge-base", "--is-ancestor", run["head_sha"], "HEAD"], cwd=ROOT, check=True)
+    return commit
 
 
 def check_vm_paths(changed, previous_policy, current_policy):
@@ -119,30 +169,31 @@ def main():
         raise ValueError("A numeric build run ID is required")
     repository = os.environ["GITHUB_REPOSITORY"]
 
-    def api(path):
-        request = urllib.request.Request("https://api.github.com/repos/" + repository + path,
-            headers={"Authorization": "Bearer " + os.environ["GH_TOKEN"],
-                     "Accept": "application/vnd.github+json"})
-        with urllib.request.urlopen(request, timeout=60) as response:
-            return json.load(response)
-
-    run = api("/actions/runs/" + identifier)
-    def get_jobs(run_id):
-        result = []
-        for page in range(1, 101):
-            batch = api(f"/actions/runs/{run_id}/jobs?per_page=100&page={page}")["jobs"]
-            result.extend(batch)
-            if len(batch) < 100:
-                return result
-        raise ValueError("Incomplete job list")
-    jobs = get_jobs(identifier)
-    check_run(run, jobs, repository)
-    commit = run["head_sha"]
+    run = api(repository, "/actions/runs/" + identifier)
+    jobs = get_jobs(repository, identifier)
+    original_run = identifier
+    if run["path"] == ".github/workflows/restore-artifacts.yml":
+        if (run["repository"]["full_name"] != repository or run["status"] != "completed" or
+                run["conclusion"] != "success" or run["event"] != "workflow_dispatch" or run["head_branch"] != "master"):
+            raise ValueError("Expected a successful trusted artifact recovery")
+        job = successful_job(jobs, "Restore verified build artifacts")
+        rows = [line.split("Recovered artifacts: ", 1)[1] for line in job_log(repository, job["id"]).splitlines() if "Recovered artifacts: " in line]
+        if len(rows) != 1:
+            raise ValueError("Missing/duplicate recovery provenance")
+        restored = json.loads(rows[0])
+        original_run = str(restored["original_run"])
+        commit = recoverable_build(repository, original_run, restored["verification_run"])
+        if restored["build_commit"] != commit:
+            raise ValueError("Restored artifact provenance mismatch")
+        subprocess.run(["git", "merge-base", "--is-ancestor", run["head_sha"], "HEAD"], cwd=ROOT, check=True)
+    else:
+        check_run(run, jobs, repository)
+        commit = run["head_sha"]
     subprocess.run(["git", "merge-base", "--is-ancestor", commit, "HEAD"], cwd=ROOT, check=True)
     changed = subprocess.check_output(["git", "diff", "--name-only", commit, "HEAD"], cwd=ROOT, text=True).splitlines()
     previous_shell = subprocess.check_output(["git", "show", commit + ":tests/ShellTests.cpp"], cwd=ROOT, text=True)
     check_paths(changed, previous_shell, (ROOT / "tests/ShellTests.cpp").read_text())
-    outputs = {"build_commit": commit}
+    outputs = {"build_commit": commit, "original_build_run": original_run}
     passed = os.environ.get("PASSED_VM_RUN", "")
     if passed:
         selected = os.environ["WINDOWS_VERSION"]
@@ -150,12 +201,9 @@ def main():
         if not passed.isdecimal() or selected not in versions:
             raise ValueError("Reuse requires a numeric run and one selected Windows version")
         platform = (versions - {selected}).pop()
-        previous = api("/actions/runs/" + passed)
-        if (previous["repository"]["full_name"] != repository or previous["status"] != "completed" or
-                previous["path"] != ".github/workflows/retest-windows11.yml" or
-                previous["event"] != "workflow_dispatch" or previous["head_branch"] != "master"):
-            raise ValueError("Expected a completed trusted master retest")
-        prior_jobs = get_jobs(passed)
+        previous = api(repository, "/actions/runs/" + passed)
+        check_retest_origin(previous, repository)
+        prior_jobs = get_jobs(repository, passed)
         successful_job(prior_jobs, "Verify unchanged product and completed prerequisites")
         successful_job(prior_jobs, "Test snapshot persistence and rebuild Windows-only control")
         vm = successful_job(prior_jobs, "windows11 / " + platform + " x64")
@@ -165,9 +213,8 @@ def main():
         old_policy = subprocess.check_output(["git", "show", prior_commit + ":automation/BehaviorEvents.ps1"], cwd=ROOT, text=True)
         check_vm_paths(vm_changes, old_policy, (ROOT / "automation/BehaviorEvents.ps1").read_text())
         # Fetch plain timestamps/lines rather than gh run view's step-name prefixes.
-        log = subprocess.check_output(["gh", "api", f"repos/{repository}/actions/jobs/{vm['id']}/logs",
-                                       "--allow-escape-sequences"], text=True, encoding="utf-8")
-        evidence = vm_evidence(log, identifier, passed, repository)
+        log = job_log(repository, vm["id"])
+        evidence = vm_evidence(log, original_run, passed, repository)
         with tempfile.TemporaryDirectory() as directory:
             path = pathlib.Path(directory) / "registry.json"
             path.write_text(json.dumps(evidence), encoding="utf-8")
