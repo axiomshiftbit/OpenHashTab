@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 """Reject findings, failed extraction and unreviewed execution diagnostics."""
 import hashlib
+import csv
 import json
 import pathlib
 import sys
@@ -84,14 +85,57 @@ def findings(document):
     return failures
 
 
-def main(directory):
+def diagnostic_findings(rows, version, root):
+    failures = 0
+    reviewed = 0
+    summaries = set()
+    detailed = set()
+    for row in rows:
+        severity, line = int(row['severity']), int(row['line'])
+        if severity not in (3, 4, 5) or line < 0:
+            raise ValueError('Invalid database diagnostic')
+        if row['message'] == 'There was an error during this compilation':
+            summaries.add(row['compilation'])
+            continue
+        detailed.add(row['compilation'])
+        notification = {
+            'level': 'warning',
+            'descriptor': {'id': 'cpp/diagnostics/extraction-warnings'},
+            'message': {'text': 'error: ' + row['message']},
+            'locations': [{'physicalLocation': {
+                'artifactLocation': {'uri': row['path']}, 'region': {'startLine': line}}}],
+        }
+        if severity < 5 and reviewed_numeric_warning(notification, version, root):
+            reviewed += 1
+        else:
+            # Print locations, not source snippets or diagnostic contents.
+            print(f"CodeQL database diagnostic: {row['path']}:{line} (severity {severity})")
+            failures += 1
+    for compilation in sorted(summaries - detailed):
+        print(f'CodeQL database diagnostic: {compilation} failed without detailed diagnostics')
+        failures += 1
+    print(f'CodeQL database diagnostics: {reviewed} reviewed; {failures} blocking.')
+    return failures
+
+
+def main(directory, diagnostics=None):
     files = list(pathlib.Path(directory).glob("*.sarif"))
     if not files:
         raise ValueError("CodeQL did not produce an analysis result")
-    failures = sum(findings(json.loads(path.read_text(encoding="utf-8-sig"))) for path in files)
+    documents = [json.loads(path.read_text(encoding="utf-8-sig")) for path in files]
+    failures = sum(findings(document) for document in documents)
+    if diagnostics:
+        versions = {run['tool']['driver'].get('semanticVersion') for document in documents for run in document['runs']}
+        if len(versions) != 1:
+            raise ValueError('Expected one analyzer version for database diagnostics')
+        with pathlib.Path(diagnostics).open(encoding='utf-8-sig', newline='') as stream:
+            rows = csv.DictReader(stream)
+            if rows.fieldnames != ['compilation', 'path', 'line', 'severity', 'message']:
+                raise ValueError('Invalid database diagnostic columns')
+            failures += diagnostic_findings(rows, versions.pop(), pathlib.Path(__file__).resolve().parents[1])
     print(f"CodeQL: {len(files)} analyses; {failures} blocking findings/diagnostics.")
     return 1 if failures else 0
 
 
 if __name__ == "__main__":
-    sys.exit(main(sys.argv[1]))
+    sys.exit(main(*sys.argv[1:]))

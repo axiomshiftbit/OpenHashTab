@@ -1,0 +1,69 @@
+name: CodeQL compiler compatibility probe
+on:
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  probe:
+    runs-on: windows-2022
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          persist-credentials: false
+      - uses: github/codeql-action/init@f051dc808ef3645eb0d08647ec751634ec2304ac
+        id: codeql
+        with:
+          languages: c-cpp
+          build-mode: manual
+          trap-caching: false
+          debug: true
+          db-location: ${{ runner.temp }}/probe-database
+      - name: Compile Windows SDK, ATL and STL with MSVC
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $vs = & vswhere -latest -version '[17.0,18.0)' -products * -requires Microsoft.VisualStudio.Component.VC.Tools.x86.x64 -property installationPath
+          if (-not $vs) { throw 'Visual Studio 2022 is required.' }
+          $null = New-Item -ItemType Directory build -Force
+          @'
+          #include <windows.h>
+          #include <atlbase.h>
+          #include <format>
+          #include <atomic>
+          int probe(VARIANT value) {
+              std::atomic<long> counter{};
+              return value.vt + static_cast<int>(counter.load());
+          }
+          '@ | Set-Content build/compiler-probe.cpp
+          foreach ($arch in @('x86', 'amd64', 'amd64_arm64')) {
+              @(
+                  "call `"$vs\VC\Auxiliary\Build\vcvarsall.bat`" $arch",
+                  'if errorlevel 1 exit /b %ERRORLEVEL%',
+                  "cl.exe /nologo /c /std:c++20 /EHsc /MT build\compiler-probe.cpp /Fobuild\probe-$arch.obj",
+                  'exit /b %ERRORLEVEL%'
+              ) | Set-Content "build/probe-$arch.cmd"
+              & cmd.exe /d /c "build\probe-$arch.cmd"
+              if ($LASTEXITCODE -ne 0) { throw "MSVC probe failed: $arch" }
+          }
+      - uses: github/codeql-action/analyze@f051dc808ef3645eb0d08647ec751634ec2304ac
+        with:
+          upload: never
+          output: ${{ runner.temp }}/probe-results
+      - name: Check all database diagnostics
+        shell: pwsh
+        env:
+          CODEQL_CLI: ${{ steps.codeql.outputs.codeql-path }}
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $PSNativeCommandUseErrorActionPreference = $true
+          & $env:CODEQL_CLI pack ci automation/codeql
+          & $env:CODEQL_CLI query run --database="$env:RUNNER_TEMP/probe-database/cpp" --output="$env:RUNNER_TEMP/probe.bqrs" automation/codeql/ExtractionDiagnostics.ql
+          & $env:CODEQL_CLI bqrs decode --format=csv --output="$env:RUNNER_TEMP/probe.csv" "$env:RUNNER_TEMP/probe.bqrs"
+          python automation/Check-CodeQL.py "$env:RUNNER_TEMP/probe-results" "$env:RUNNER_TEMP/probe.csv"
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        if: always()
+        with:
+          name: compiler-probe-diagnostics
+          path: ${{ runner.temp }}/probe.csv
+          if-no-files-found: warn

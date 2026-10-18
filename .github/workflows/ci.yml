@@ -94,6 +94,7 @@ jobs:
           languages: c-cpp
           build-mode: manual
           queries: security-extended
+          trap-caching: false
           debug: true
           db-location: ${{ runner.temp }}/codeql-database
       - name: Verify the installed SDK and WDK
@@ -137,6 +138,9 @@ jobs:
           & $env:CODEQL_CLI query run --database="$env:RUNNER_TEMP/codeql-database/cpp" --output="$env:RUNNER_TEMP/extraction.bqrs" automation/codeql/ExtractionCoverage.ql
           & $env:CODEQL_CLI bqrs decode --format=csv --output="$env:RUNNER_TEMP/extraction.csv" "$env:RUNNER_TEMP/extraction.bqrs"
           python automation/Check-CodeQLCoverage.py "$env:RUNNER_TEMP/extraction.csv"
+          & $env:CODEQL_CLI query run --database="$env:RUNNER_TEMP/codeql-database/cpp" --output="$env:RUNNER_TEMP/diagnostics.bqrs" automation/codeql/ExtractionDiagnostics.ql
+          & $env:CODEQL_CLI bqrs decode --format=csv --output="$env:RUNNER_TEMP/diagnostics.csv" "$env:RUNNER_TEMP/diagnostics.bqrs"
+          python automation/Check-CodeQL.py "$env:RUNNER_TEMP/codeql-results" "$env:RUNNER_TEMP/diagnostics.csv"
       - name: Check restored NuGet packages and source dependencies
         run: python automation/Check-Vulnerabilities.py --assets
       - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1

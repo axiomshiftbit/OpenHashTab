@@ -26,6 +26,9 @@ add_compile_options(
         -flto
         /guard:cf
         /Zi
+        # clang-cl/MSVC leave __STDC__ undefined in C++. Match that in CodeQL
+        # too, so Windows SDK/ATL use the same anonymous COM unions.
+        $<$<COMPILE_LANGUAGE:CXX>:/U__STDC__>
 )
 
 add_link_options(

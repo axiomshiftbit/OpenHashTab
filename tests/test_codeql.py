@@ -100,3 +100,25 @@ class CodeQLResults(unittest.TestCase):
             self.assertFalse(gate.reviewed_numeric_warning(notification, "2.27.2", root))
             path.unlink()
             self.assertFalse(gate.reviewed_numeric_warning(notification, "2.27.2", root))
+
+    def test_system_header_errors_cannot_pass(self):
+        rows = [{'compilation': 'one', 'path': 'C:/SDK/oaidl.h', 'line': '588', 'severity': '4',
+                 'message': "class 'tagVARIANT' has no member 'vt'"}]
+        self.assertEqual(gate.diagnostic_findings(rows, '2.27.2', pathlib.Path('.')), 1)
+
+    def test_database_summary_requires_reviewed_underlying_diagnostic(self):
+        source = b'unsigned long long x = 1ui64;\n'
+        summary = {'compilation': 'one', 'path': 'known.c', 'line': '0', 'severity': '4',
+                   'message': 'There was an error during this compilation'}
+        detail = dict(summary, line='7', message='extra text after expected end of number')
+        reviewed = {'known.c': (hashlib.sha256(source).hexdigest(), {7})}
+        with tempfile.TemporaryDirectory() as directory, mock.patch.dict(gate.NUMERIC_SUFFIX_DIAGNOSTICS, reviewed, clear=True):
+            root = pathlib.Path(directory)
+            (root / 'known.c').write_bytes(source)
+            self.assertEqual(gate.diagnostic_findings([summary], '2.27.2', root), 1)
+            self.assertEqual(gate.diagnostic_findings([summary, detail], '2.27.2', root), 0)
+            self.assertEqual(gate.diagnostic_findings([summary, detail], '2.27.3', root), 1)
+            self.assertEqual(gate.diagnostic_findings([summary, dict(detail, severity='5')], '2.27.2', root), 1)
+            self.assertEqual(gate.diagnostic_findings([summary, dict(detail, compilation='two')], '2.27.2', root), 1)
+            with self.assertRaises(ValueError):
+                gate.diagnostic_findings([dict(detail, severity='-1')], '2.27.2', root)
