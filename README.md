@@ -1,52 +1,52 @@
 # OpenHashTab
 
-**English** · [Русский](README.ru.md)
+**Русский** · [English](README.en.md)
 
-Calculate and verify file hashes in Windows Explorer, a standalone window, or scripts. Compare files and folders and export verification reports.
+Вычисление и сверка хешей в Проводнике Windows, отдельном окне и скриптах. Сравнение файлов и папок, экспорт отчётов проверки.
 
-[Download](https://github.com/axiomshiftbit/OpenHashTab/releases) · [Build and tests](https://github.com/axiomshiftbit/OpenHashTab/actions/workflows/ci.yml) · [GPL-3.0-or-later](COPYING)
+[Скачать](https://github.com/axiomshiftbit/OpenHashTab/releases) · [Сборка и тесты](https://github.com/axiomshiftbit/OpenHashTab/actions/workflows/ci.yml) · [GPL-3.0-or-later](COPYING)
 
-## Install and use
+## Установка и работа
 
-To install, download one **`.msi`** file matching your Windows architecture and installation scope. **x64** is for 64-bit Windows on Intel/AMD processors; **ARM64** is for Windows on Arm. **Machine** installs for all users and requires administrator privileges; **User** installs only for your account without administrator privileges.
+Для установки скачайте один файл **`.msi`**, выбрав архитектуру Windows и установку для себя или всех пользователей. **x64** — для 64-битной Windows на процессорах Intel/AMD; **ARM64** — для Windows on Arm. **Machine** устанавливает программу для всех пользователей и требует прав администратора; **User** — только для текущей учётной записи, без прав администратора.
 
-| Release file | Contents and purpose |
+| Файл релиза | Содержимое и назначение |
 | --- | --- |
-| `OpenHashTab-3.1.2-source.tar.gz` | Source code for version **3.1.2**, including the pinned submodules, in a gzip-compressed tar archive. For building or studying the code; installation does not require it. |
-| `OpenHashTab-3.1.2-Windows11-candidate.zip` | A ZIP bundle of all four MSI installers below, documentation, licenses, build information and SHA-256 checksums. **Windows11** identifies the target OS; **candidate** means a release candidate. Extract it and run the appropriate MSI; this is not a portable edition. |
-| `OpenHashTab_Machine_ARM64.msi` | Windows on Arm installer for **all users**; requires administrator privileges. |
-| `OpenHashTab_Machine_x64.msi` | Intel/AMD x64 installer for **all users**; requires administrator privileges. |
-| `OpenHashTab_User_ARM64.msi` | Windows on Arm installer for **the current user**, without administrator privileges. |
-| `OpenHashTab_User_x64.msi` | Intel/AMD x64 installer for **the current user**, without administrator privileges. |
+| `OpenHashTab-3.1.2-source.tar.gz` | Исходный код версии **3.1.2**, включая закреплённые версии подмодулей, в архиве tar со сжатием gzip. Нужен для самостоятельной сборки или изучения кода; для установки не требуется. |
+| `OpenHashTab-3.1.2-Windows11-candidate.zip` | ZIP-архив со всеми четырьмя MSI ниже, документацией, лицензиями, сведениями о сборке и контрольными суммами SHA-256. **Windows11** обозначает целевую ОС; **candidate** — предварительную сборку, кандидата в релиз. Распакуйте архив и запустите подходящий MSI; это не переносная версия программы. |
+| `OpenHashTab_Machine_ARM64.msi` | Установщик для Windows on Arm, **для всех пользователей**; нужны права администратора. |
+| `OpenHashTab_Machine_x64.msi` | Установщик для Intel/AMD x64, **для всех пользователей**; нужны права администратора. |
+| `OpenHashTab_User_ARM64.msi` | Установщик для Windows on Arm, **только для текущего пользователя**, без прав администратора. |
+| `OpenHashTab_User_x64.msi` | Установщик для Intel/AMD x64, **только для текущего пользователя**, без прав администратора. |
 
-**3.1.2** is the application version. MSI filenames omit the version; download them from the release you want. **`.msi`** denotes a Windows Installer package. For example, on an Intel/AMD PC, choose `OpenHashTab_User_x64.msi` for your account or `OpenHashTab_Machine_x64.msi` for everyone. You only need one installer. Release candidates are unsigned; SHA-256 checksums accompany the downloads.
+**3.1.2** — версия программы. В названиях MSI версия не указана: скачивайте их из нужного релиза. **`.msi`** — пакет установщика Windows Installer. Например, на ПК с Intel/AMD выберите `OpenHashTab_User_x64.msi` для своей учётной записи или `OpenHashTab_Machine_x64.msi` для всех пользователей. Достаточно одного установщика. Предварительные сборки не подписаны; контрольные суммы SHA-256 приложены к загрузкам.
 
-Target: Windows 11 x64/ARM64. Testing also includes Windows 10 Enterprise LTSC on the local test machine; see Actions for the exact Windows 11 versions and results.
+Целевая ОС — Windows 11 x64/ARM64. Локальное тестирование также проводится на Windows 10 Enterprise LTSC; точные версии Windows 11 и результаты указаны в Actions.
 
-1. Right-click a file → **Properties → Hashes**, or **Show more options → Hashes** in Windows 11.
-2. Choose algorithms in **Settings**. Paste a known hash into **Check against**; double-click a result to copy it.
-3. Use **Compare…** for two files/folders, **Verification report…** for CSV/JSON, or the regular export controls to create a checksum file.
+1. Нажмите правой кнопкой на файл → **Свойства → Хэши**, либо **Показать дополнительные параметры → Хэши** в Windows 11.
+2. Выберите алгоритмы в **Настройках**. Вставьте известную сумму в поле **Проверить совпадения**; двойной щелчок по результату копирует его.
+3. Используйте **Сравнить…** для двух файлов/папок, **Отчёт проверки…** для CSV/JSON или обычный экспорт для создания файла контрольных сумм.
 
-## Features
+## Возможности
 
-- **61 hash variants**, algorithm search, descriptions and selection presets.
-- File/folder comparison: matches, differences, missing entries, empty directories and read errors.
-- CSV/JSON reports: path, algorithm, expected and actual hash, status and error.
-- Progress with processed bytes, average speed, estimated time remaining and cancellation.
-- Checksum-file verification, export and clipboard; Unicode and long paths.
-- Optional VirusTotal lookup and a command-line interface.
+- **61 вариант хеширования**, поиск алгоритмов, пояснения и наборы настроек.
+- Сравнение файлов/папок: совпадения, различия, отсутствующие элементы, пустые каталоги и ошибки чтения.
+- Отчёты CSV/JSON: путь, алгоритм, ожидаемый и вычисленный хеш, результат и ошибка.
+- Прогресс: обработанный объём, средняя скорость, оставшееся время и отмена.
+- Проверка файлов контрольных сумм, экспорт и буфер обмена; Unicode и длинные пути.
+- Проверка через VirusTotal по желанию пользователя и командная строка.
 
-Legacy checksums remain available for compatibility. The **Recommended** preset selects SHA-256 and BLAKE3; CRC/xxHash and legacy MD4/MD5/SHA-1 are not substitutes for modern cryptographic hashes.
+Старые алгоритмы сохранены для совместимости. Набор **«Рекомендуемые»** выбирает SHA-256 и BLAKE3; CRC/xxHash и старые MD4/MD5/SHA-1 не заменяют современные криптографические хеши.
 
-[Algorithm parameters and sources](Algorithms/extended/README.md) · [Reference test vectors](tests/ExtendedHashVectors.md)
+[Параметры и источники алгоритмов](Algorithms/extended/README.md) · [Эталонные тесты](tests/ExtendedHashVectors.md)
 
-**Upgrading:** recalculate ParallelHash checksums for nonempty files produced by the original version: its byte/bit length handling was incorrect.
+**При обновлении:** пересчитайте суммы ParallelHash для непустых файлов, полученные исходной версией: в ней была ошибка передачи длины в байтах вместо битов.
 
-## Supported hashes
+## Поддерживаемые хеши
 
-All **61 variants** are listed below, using their names in the application. Different output lengths count as separate variants.
+Полный список содержит **61 вариант**. Названия приведены как в программе; разные длины результата учитываются как отдельные варианты.
 
-| Family | Supported variants |
+| Семейство | Поддерживаемые варианты |
 | --- | --- |
 | CRC | `CRC32`, `CRC64` |
 | xxHash | `XXH32`, `XXH64`, `XXH3-64`, `XXH3-128` |
@@ -60,22 +60,22 @@ All **61 variants** are listed below, using their names in the application. Diff
 | BLAKE3 | `BLAKE3`, `BLAKE3-512` |
 | KangarooTwelve | `K12-264`, `K12-256`, `K12-512` |
 | ParallelHash | `PH128-264`, `PH256-528` |
-| Streebog (GOST R 34.11-2012) | `GOST 2012 (256)`, `GOST 2012 (512)` |
+| Стрибог (ГОСТ Р 34.11-2012) | `GOST 2012 (256)`, `GOST 2012 (512)` |
 | BelT | `belt-hash` |
 | eDonkey | `eD2k`, `eD2k (Old)` |
 | QuickXorHash | `QuickXorHash` |
 | Ascon | `Ascon-Hash256`, `Ascon-XOF128-256`, `Ascon-CXOF128-256` |
 | TurboSHAKE | `TurboSHAKE128-256`, `TurboSHAKE256-512` |
 | KT256 | `KT256-512` |
-| Kupyna | `Kupyna-256`, `Kupyna-384`, `Kupyna-512` |
+| Купина (Kupyna) | `Kupyna-256`, `Kupyna-384`, `Kupyna-512` |
 | Skein | `Skein-256-256`, `Skein-512-256`, `Skein-512-512`, `Skein-1024-1024` |
 | Grøstl | `Groestl-224`, `Groestl-256`, `Groestl-384`, `Groestl-512` |
 | JH | `JH-224`, `JH-256`, `JH-384`, `JH-512` |
 | Whirlpool | `Whirlpool` |
 
-## Command line
+## Командная строка
 
-Example for a Machine installation:
+Пример для установки Machine:
 
 ```powershell
 $cli = 'C:\Program Files\OpenHashTab\OpenHashTabCLI.exe'
@@ -85,40 +85,40 @@ $cli = 'C:\Program Files\OpenHashTab\OpenHashTabCLI.exe'
 & $cli algorithms
 ```
 
-Exit codes: **0** success, **1** differences, **2** invalid arguments, **3** read/operation/output error, **4** cancelled. [Detailed guide, formats and limitations (Russian)](docs/Usage.md).
+Коды возврата: **0** — успех, **1** — различия, **2** — неверные аргументы, **3** — ошибка чтения/операции/вывода, **4** — отмена. [Подробное руководство, форматы и ограничения](docs/Usage.md).
 
-## Screenshots
+## Скриншоты
 
-Actual version 3.1.2 on the test machine, using demonstration files.
+Реальная версия 3.1.2 на тестовой машине с демонстрационными файлами.
 
-![English main window with calculated hashes](docs/screenshots/main-en.png)
+![Основное окно на русском языке с вычисленными хешами](docs/screenshots/main-ru.png)
 
 <details>
-<summary>Settings and folder comparison</summary>
+<summary>Настройки и сравнение папок</summary>
 
-![English algorithm and display settings](docs/screenshots/settings-en.png)
+![Настройки алгоритмов и отображения на русском языке](docs/screenshots/settings-ru.png)
 
-![English folder comparison showing matches, differences and missing files](docs/screenshots/comparison-en.png)
+![Сравнение папок: совпадения, различия и отсутствующие файлы](docs/screenshots/comparison-ru.png)
 
 </details>
 
-## Privacy and testing
+## Приватность и проверки
 
-Hash calculation is local. After consent, VirusTotal receives the hash, file path and creation date; file contents are not uploaded. Update checks contact GitHub on request. Administrators can disable VirusTotal with a nonzero `ForceDisableVT` DWORD under `HKLM\SOFTWARE\OpenHashTab` (both registry views if using x86 and x64 components). `LangIdOverride` under `HKCU\SOFTWARE\OpenHashTab` selects the UI language: `1033` English, `1049` Russian.
+Хеши вычисляются локально. После согласия VirusTotal получает хеш, путь и дату создания файла; содержимое файла не загружается. Проверка обновлений обращается к GitHub по отдельному действию пользователя. Администратор может отключить VirusTotal ненулевым DWORD `ForceDisableVT` в `HKLM\SOFTWARE\OpenHashTab` (в обоих представлениях реестра при использовании x86 и x64). DWORD `LangIdOverride` в `HKCU\SOFTWARE\OpenHashTab` задаёт язык интерфейса: `1049` — русский, `1033` — английский.
 
-CI includes known-answer and streaming tests, x86/x64/ARM64 builds, Windows 11 installation/upgrade/repair/uninstall, CodeQL, OSV/NVD, ASan/UBSan, Defender and Sysmon. These checks are not cryptographic certification; the Skein archive has no OSV package identifier. Folder comparison is not a filesystem snapshot and does not compare ACLs or alternate data streams.
+CI включает эталонные и потоковые тесты, сборки x86/x64/ARM64, установку/обновление/восстановление/удаление в Windows 11, CodeQL, OSV/NVD, ASan/UBSan, Defender и Sysmon. Это не криптографическая сертификация; архив Skein не имеет идентификатора пакета OSV. Сравнение папок не создаёт снимок ФС и не сравнивает ACL и альтернативные потоки данных.
 
-## Build
+## Сборка
 
-Windows; Visual Studio 2022 C++, Clang, CMake, Ninja, Python 3, .NET SDK, Windows SDK/WDK 10.0.26100.0 and PowerShell 7.3+:
+Windows; Visual Studio 2022 C++, Clang, CMake, Ninja, Python 3, .NET SDK, Windows SDK/WDK 10.0.26100.0 и PowerShell 7.3+:
 
 ```powershell
 git submodule update --init --recursive
 pwsh ./build_all.ps1 -Compiler MSVC
 ```
 
-## Credits and license
+## Авторство и лицензия
 
-Based on **[OpenHashTab](https://github.com/namazso/OpenHashTab)** by **[namazso](https://github.com/namazso)**. This independently maintained repository started from the `master` branch of [MarkDDi/OpenHashTab](https://github.com/MarkDDi/OpenHashTab), preserving its history. It does not imply endorsement by the original author.
+Основано на **[OpenHashTab](https://github.com/namazso/OpenHashTab)** автора **[namazso](https://github.com/namazso)**. Независимо поддерживаемый репозиторий создан из ветки `master` проекта [MarkDDi/OpenHashTab](https://github.com/MarkDDi/OpenHashTab) с сохранением истории. Это не означает одобрения доработок оригинальным автором.
 
-Copyright 2019–2025 namazso and the respective contributors. [GNU GPL v3 or later](COPYING); third-party notices remain in the sources and packages. See [installer notices](Setup/InstallerLicense.rtf), [Bee2 license](Algorithms/bee2/bee2/LICENSE.txt), and [additional implementations](Algorithms/extended/README.md).
+Авторские права 2019–2025 namazso и соответствующих участников. [GNU GPL v3 или более поздняя](COPYING); уведомления сторонних компонентов сохранены в исходниках и пакетах. См. [уведомления установщика](Setup/InstallerLicense.rtf), [лицензию Bee2](Algorithms/bee2/bee2/LICENSE.txt), [дополнительные реализации](Algorithms/extended/README.md).
