@@ -6,6 +6,9 @@ add_executable(CoreTests ../../tests/CoreTests.cpp ../../tests/DialogTemplates.r
     ${APP}/Queues.cpp ${APP}/Exporter.cpp)
 target_include_directories(CoreTests PRIVATE ${APP})
 target_precompile_headers(CoreTests PRIVATE ${APP}/stdafx.h)
+if(CMAKE_DISABLE_PRECOMPILE_HEADERS)
+    target_compile_options(CoreTests PRIVATE "/FI${APP}/stdafx.h")
+endif()
 target_compile_definitions(CoreTests PRIVATE UNICODE _UNICODE "CI_VERSION=\"${CI_VERSION}\"")
 target_compile_options(CoreTests PRIVATE /EHsc)
 target_link_libraries(CoreTests PRIVATE LegacyAlgorithms AlgorithmsDlls ctre concurrentqueue tiny-json

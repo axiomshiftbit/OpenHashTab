@@ -64,6 +64,9 @@ target_link_options(OpenHashTab PRIVATE
         )
 
 target_precompile_headers(OpenHashTab PRIVATE stdafx.h)
+if(CMAKE_DISABLE_PRECOMPILE_HEADERS)
+    target_compile_options(OpenHashTab PRIVATE "/FI${CMAKE_CURRENT_SOURCE_DIR}/stdafx.h")
+endif()
 
 add_custom_command(TARGET OpenHashTab POST_BUILD
         COMMAND ${CMAKE_COMMAND} -E copy $<TARGET_RUNTIME_DLLS:OpenHashTab> $<TARGET_FILE_DIR:OpenHashTab>

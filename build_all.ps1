@@ -14,7 +14,7 @@
 # You should have received a copy of the GNU General Public License
 # along with OpenHashTab.  If not, see <https://www.gnu.org/licenses/>.
 
-[CmdletBinding()] param ()
+[CmdletBinding()] param ([switch]$DisablePrecompiledHeaders)
 
 $ErrorActionPreference = 'Stop'
 # PowerShell 7.3+ propagates failures from cmake, dotnet and signing commands.
@@ -292,6 +292,7 @@ $OhtVersionNumeric = "$OhtVersionMajor.$OhtVersionMinor.$OhtVersionPatch";
         "-DCI_VERSION_MAJOR=$OhtVersionMajor" `
         "-DCI_VERSION_MINOR=$OhtVersionMinor" `
         "-DCI_VERSION_PATCH=$OhtVersionPatch" `
+        "-DCMAKE_DISABLE_PRECOMPILE_HEADERS=$DisablePrecompiledHeaders" `
         "-DBUILD_TESTING=ON"
     & $Cmake --build $BuildDir
 
