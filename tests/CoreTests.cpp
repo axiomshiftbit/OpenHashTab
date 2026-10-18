@@ -388,6 +388,24 @@ static void large_file_hashing() {
   check(WriteFile(handle, tail, sizeof(tail) - 1, &transferred, nullptr) != FALSE && transferred == sizeof(tail) - 1,
       "write nonzero sparse-file tail");
   CloseHandle(handle);
+  if constexpr (sizeof(size_t) > 4) {
+    // A single Update exposes a 32-bit loop counter that chunked file reads do not.
+    const auto input = utl::OpenForRead(file.wstring());
+    check(input != INVALID_HANDLE_VALUE, "open CRC64 large-buffer fixture");
+    const auto mapping = CreateFileMappingW(input, nullptr, PAGE_READONLY, 0, 0, nullptr);
+    check(mapping != nullptr, "map CRC64 large-buffer fixture");
+    const auto data = MapViewOfFile(mapping, FILE_MAP_READ, 0, 0, 0);
+    check(data != nullptr, "view CRC64 large-buffer fixture");
+    const auto size = static_cast<size_t>((1ULL << 32) + sizeof(tail) - 1);
+    const auto actual = digest(*LegacyHashAlgorithm::ByName("CRC64"),
+        std::string_view(static_cast<const char*>(data), size), size);
+    check(UnmapViewOfFile(data) != FALSE, "unmap CRC64 large-buffer fixture");
+    CloseHandle(mapping);
+    CloseHandle(input);
+    check(actual == utl::HashStringToBytes(std::string_view("7e3fbec98de8c6b6")),
+        "CRC64 single update includes the nonzero tail beyond 4 GiB");
+    std::puts("PASS: CRC64 DLL single 4 GiB + 18 byte update");
+  }
   Coordinator coordinator({file.wstring()});
   for (auto& enabled : coordinator.settings.algorithms) enabled.SetNoSave(false);
   const auto algorithm = LegacyHashAlgorithm::ByName("SHA-256");

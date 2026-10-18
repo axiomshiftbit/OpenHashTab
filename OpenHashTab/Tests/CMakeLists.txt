@@ -13,8 +13,8 @@ target_compile_definitions(CoreTests PRIVATE UNICODE _UNICODE "CI_VERSION=\"${CI
 target_compile_options(CoreTests PRIVATE /EHsc)
 target_link_libraries(CoreTests PRIVATE LegacyAlgorithms AlgorithmsDlls ctre concurrentqueue tiny-json
     ntdll winhttp comctl32 shlwapi comdlg32 shell32 ole32 uuid)
-add_executable(EncodingTests ../../tests/EncodingTests.cpp ${APP}/base64.cpp)
-target_include_directories(EncodingTests PRIVATE ${APP})
+add_executable(EncodingTests ../../tests/EncodingTests.cpp ${APP}/base64.cpp ../../Algorithms/crc64/crc64.cpp)
+target_include_directories(EncodingTests PRIVATE ${APP} ../../Algorithms/crc64)
 target_compile_options(EncodingTests PRIVATE /EHsc)
 add_test(NAME core COMMAND CoreTests)
 add_test(NAME encoding COMMAND EncodingTests)
