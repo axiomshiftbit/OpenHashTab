@@ -355,11 +355,19 @@ INT_PTR MainDialog::OnInitDialog(UINT, WPARAM, LPARAM) {
   SendMessageW(_hwnd_HASH_LIST, LVM_SETTEXTBKCOLOR, 0, CLR_NONE);
   SendMessageW(_hwnd_HASH_LIST, LVM_SETEXTENDEDLISTVIEWSTYLE, 0, LVS_EX_FULLROWSELECT);
 
+  auto algorithm_width = ListView_GetStringWidth(_hwnd_HASH_LIST, utl::GetString(IDS_ALGORITHM).c_str());
+  for (const auto& algorithm : LegacyHashAlgorithm::Algorithms()) {
+    const auto name = utl::UTF8ToWide(algorithm.GetName());
+    algorithm_width = std::max(algorithm_width, ListView_GetStringWidth(_hwnd_HASH_LIST, name.c_str()));
+  }
+  // List-view text needs padding in addition to its measured glyph width.
+  algorithm_width += utl::GetDPIScaledPixels(_hwnd, 16);
+
   // we put the string table ID in the text length field, to fix it up later
   LVCOLUMN cols[] =
     {
       {LVCF_FMT | LVCF_WIDTH | LVCF_TEXT, LVCFMT_LEFT, utl::GetDPIScaledPixels(_hwnd,  140), nullptr,  IDS_FILENAME},
-      {LVCF_FMT | LVCF_WIDTH | LVCF_TEXT, LVCFMT_LEFT, utl::GetDPIScaledPixels(_hwnd,   70), nullptr, IDS_ALGORITHM},
+      {LVCF_FMT | LVCF_WIDTH | LVCF_TEXT, LVCFMT_LEFT, algorithm_width,                    nullptr, IDS_ALGORITHM},
       {LVCF_FMT | LVCF_WIDTH | LVCF_TEXT, LVCFMT_LEFT, utl::GetDPIScaledPixels(_hwnd, 1100), nullptr,      IDS_HASH},
   };
 

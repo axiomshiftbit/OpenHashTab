@@ -30,10 +30,10 @@ utl::Version utl::GetLatestVersion() {
 
   if (reply.error_code)
     throw std::runtime_error(FormatString(
-      "Error %08X at %d: %ls",
+      "Error %08X at %d: %s",
       reply.error_code,
       reply.error_location,
-      ErrorToString(reply.error_code).c_str()
+      WideToUTF8(ErrorToString(reply.error_code).c_str()).c_str()
     ));
 
   if (reply.http_code == 404)

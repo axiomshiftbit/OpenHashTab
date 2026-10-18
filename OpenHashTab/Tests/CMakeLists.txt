@@ -3,13 +3,14 @@ set(APP "${CMAKE_CURRENT_SOURCE_DIR}/../OpenHashTab")
 add_executable(CoreTests ../../tests/CoreTests.cpp ../../tests/DialogTemplates.rc
     ${APP}/base64.cpp ${APP}/utl.cpp ${APP}/SumFileParser.cpp ${APP}/path.cpp
     ${APP}/Settings.cpp ${APP}/Coordinator.cpp ${APP}/FileHashTask.cpp
-    ${APP}/Queues.cpp ${APP}/Exporter.cpp)
+    ${APP}/Queues.cpp ${APP}/Exporter.cpp ${APP}/virustotal.cpp ${APP}/updatecheck.cpp)
 target_include_directories(CoreTests PRIVATE ${APP})
 target_precompile_headers(CoreTests PRIVATE ${APP}/stdafx.h)
 if(CMAKE_DISABLE_PRECOMPILE_HEADERS)
     target_compile_options(CoreTests PRIVATE "/FI${APP}/stdafx.h")
 endif()
-target_compile_definitions(CoreTests PRIVATE UNICODE _UNICODE "CI_VERSION=\"${CI_VERSION}\"")
+target_compile_definitions(CoreTests PRIVATE UNICODE _UNICODE "CI_VERSION=\"${CI_VERSION}\""
+    CI_VERSION_MAJOR=${CI_VERSION_MAJOR} CI_VERSION_MINOR=${CI_VERSION_MINOR} CI_VERSION_PATCH=${CI_VERSION_PATCH})
 target_compile_options(CoreTests PRIVATE /EHsc)
 target_link_libraries(CoreTests PRIVATE LegacyAlgorithms AlgorithmsDlls ctre concurrentqueue tiny-json
     ntdll winhttp comctl32 shlwapi comdlg32 shell32 ole32 uuid)

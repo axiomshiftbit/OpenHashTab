@@ -6,6 +6,8 @@
 #include "utl.h"
 #include "json.h"
 #include "wnd.h"
+#include "https.h"
+#include "virustotal.h"
 #include <filesystem>
 #include <fstream>
 #include <cstdio>
@@ -16,6 +18,56 @@
 
 static void check(bool ok, const char* message) {
   if (!ok) throw std::runtime_error(message);
+}
+// Exercise the production response handlers without credentials or network I/O.
+static HTTPResult http_reply{};
+static std::string http_request_body;
+HTTPResult DoHTTPS(const HTTPRequest& request) {
+  http_request_body = request.body ? std::string(static_cast<const char*>(request.body), request.body_size) : std::string{};
+  return http_reply;
+}
+
+static void network_responses() {
+  const auto winhttp = LoadLibraryExW(L"winhttp.dll", nullptr, LOAD_LIBRARY_SEARCH_SYSTEM32);
+  check(winhttp != nullptr, "load localized WinHTTP error messages");
+  for (const auto error : {ERROR_WINHTTP_TIMEOUT, ERROR_WINHTTP_NAME_NOT_RESOLVED, ERROR_WINHTTP_CANNOT_CONNECT}) {
+    http_reply = {};
+    http_reply.error_code = error;
+    http_reply.error_location = 5;
+    const auto message = utl::ErrorToString(error);
+    check(!message.empty(), "localized WinHTTP error text exists");
+    for (bool update : {false, true}) {
+      bool caught = false;
+      try {
+        if (update) (void)utl::GetLatestVersion();
+        else (void)vt::Query({}, 0);
+      } catch (const std::runtime_error& e) {
+        const auto text = utl::UTF8ToWide(e.what());
+        check(text.find(message) != std::wstring::npos, "network error retains its localized text as UTF-8");
+        caught = true;
+      }
+      check(caught, "network failure becomes a displayable runtime error");
+    }
+  }
+  FreeLibrary(winhttp);
+  http_reply = {};
+  http_reply.http_code = 200;
+  http_reply.body = R"({"tag_name":"v3.1.2"})";
+  check(utl::GetLatestVersion() == utl::Version{3, 1, 2}, "parse a valid update response");
+  http_reply.body = R"({"data":[]})";
+  check(vt::Query({}, 0).empty(), "empty VirusTotal request has no file reports");
+  for (const auto body : {"", "{", "[]", R"({"data":false})", R"({"tag_name":false})"}) {
+    http_reply.body = body;
+    for (bool update : {false, true}) {
+      bool caught = false;
+      try {
+        if (update) (void)utl::GetLatestVersion();
+        else (void)vt::Query({}, 0);
+      } catch (const std::runtime_error&) { caught = true; }
+      check(caught, "malformed service response becomes a displayable runtime error");
+    }
+  }
+  std::puts("PASS: localized network errors and service response validation");
 }
 static int destroyed_contexts = 0;
 static size_t ALGORITHMS_CC test_parameters(const uint64_t*) { return 1; }
@@ -198,6 +250,12 @@ static void parsers() {
   check(utl::HashStringToBytes(std::string_view(std::string(132, 'a'))).size() == 66, "maximum hash length");
   check(utl::HashStringToBytes(std::string_view(std::string(134, 'a'))).empty(), "oversize hash rejected");
   check(utl::FindHashInString(std::wstring(1000, L'A')).empty(), "long clipboard hash rejected");
+  const auto mixed_case_hash = std::vector<uint8_t>({0xab, 0x12, 0xcd, 0xef});
+  for (const auto text : {L"ab12cdef", L"AB12CDEF", L"aB12CdEf", L"aB 12 Cd Ef",
+                          L"checksum: aB12CdEf *file.bin"})
+    check(utl::FindHashInString(text) == mixed_case_hash, "clipboard hash accepts either or mixed hex case");
+  for (const auto text : {L"aB12CdE", L"aB12CdEf0", L"zaB12CdEf", L"aB12CdEfz"})
+    check(utl::FindHashInString(text).empty(), "clipboard hash rejects partial hex words");
   check(utl::UTF8ToWide("\xff").empty(), "invalid UTF-8 rejected");
   check(utl::UTF8ToWide("\xd0\xa4\xd0\xb0\xd0\xb9\xd0\xbb") == L"\u0424\u0430\u0439\u043b", "Unicode conversion");
   auto sfv = parse("; comment\r\nfile with spaces.bin 352441c2\r\n");
@@ -282,6 +340,32 @@ static void file_hashing() {
       const auto exporter = Exporter::k_exporters[algorithm.Idx()];
       const auto result = parse(exporter->GetExportString(&coordinator.settings, false, tasks));
       check(result.size() == 1 && result.front().second == task->GetHashResult()[algorithm.Idx()], "algorithm export/import round trip");
+    }
+    const auto sha256 = LegacyHashAlgorithm::IdxByName("SHA-256");
+    for (const auto hash : {
+        "ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad",
+        "BA7816BF8F01CFEA414140DE5DAE2223B00361A396177A9CB410FF61F20015AD",
+        "bA7816Bf8F01cFeA414140dE5DaE2223B00361a396177A9cB410fF61F20015Ad"}) {
+      for (bool found : {false, true}) {
+        http_reply = {};
+        http_reply.http_code = 200;
+        http_reply.body = utl::FormatString(
+            R"({"data":[{"hash":"%s","found":%s,"positives":2,"total":70,"permalink":"https://www.virustotal.com/gui/file/%s"}]})",
+            hash, found ? "true" : "false", hash);
+        const auto reports = vt::Query(tasks, sha256);
+        check(reports.size() == 1 && reports.front().file == task.get() && reports.front().found == found,
+            "VirusTotal response is associated with the hashed file");
+        if (found)
+          check(reports.front().positives == 2 && reports.front().total == 70 &&
+              reports.front().permalink == std::string("https://www.virustotal.com/gui/file/") + hash,
+              "VirusTotal detection counts and report link are preserved");
+        json_parser request{http_request_body.c_str()};
+        check(request.root() && json_getType(request.root()) == JSON_ARRAY, "VirusTotal request is valid JSON");
+        const auto entry = json_getChild(request.root());
+        const auto name = entry ? json_getProperty(entry, "image_path") : nullptr;
+        check(name && json_getType(name) == JSON_TEXT &&
+            utl::UTF8ToWide(json_getValue(name)) == task->GetDisplayName(), "VirusTotal request preserves Unicode filenames");
+      }
     }
   }
   // Capture the original size, then truncate before submitting asynchronous I/O.
@@ -465,6 +549,7 @@ int main() {
   try {
     root = std::filesystem::temp_directory_path() / (L"OpenHashTabTests-" + std::to_wstring(GetCurrentProcessId()));
     std::filesystem::create_directories(root);
+    network_responses();
     ownership();
     hashing();
     official_hash_vectors();

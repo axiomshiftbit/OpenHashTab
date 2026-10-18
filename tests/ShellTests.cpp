@@ -138,10 +138,16 @@ static void CALLBACK inspect_settings(HWND, UINT, UINT_PTR timer, DWORD) {
   }
   const auto list = GetDlgItem(window, IDC_ALGORITHM_LIST);
   if (ListView_GetItemCount(list) != 36) settings_checked = false;
+  const auto main_list = GetDlgItem(GetWindow(window, GW_OWNER), IDC_HASH_LIST);
+  const auto algorithm_width = ListView_GetColumnWidth(main_list, 1);
   for (int index = 0; index < ListView_GetItemCount(list); ++index) {
     wchar_t name[128]{};
     ListView_GetItemText(list, index, 0, name, 128);
     if (!name[0]) settings_checked = false;
+    if (!main_list || algorithm_width <= ListView_GetStringWidth(main_list, name)) {
+      std::fprintf(stderr, "FAIL: main algorithm column clips settings algorithm %d\n", index);
+      settings_checked = false;
+    }
   }
   EndDialog(window, IDCANCEL);
 }
@@ -175,6 +181,24 @@ static bool window_and_popup_menus(IContextMenu* context) {
       return false;
     }
   }
+  wchar_t algorithm[128]{}, hash[256]{}, result[512]{};
+  ListView_GetItemText(list, 0, 1, algorithm, 128);
+  ListView_GetItemText(list, 0, 2, hash, 256);
+  if (!algorithm[0] || !hash[0]) return false;
+  for (int form = 0; form < 3; ++form) {
+    for (size_t i = 0; hash[i]; ++i) {
+      if (hash[i] >= L'A' && hash[i] <= L'F') hash[i] += L'a' - L'A';
+      if (hash[i] >= L'a' && hash[i] <= L'f' && (form == 1 || (form == 2 && i % 2)))
+        hash[i] -= L'a' - L'A';
+    }
+    SetDlgItemTextW(window, IDC_EDIT_HASH, hash);
+    GetDlgItemTextW(window, IDC_STATIC_CHECK_RESULT, result, 512);
+    if (std::wstring(result).find(algorithm) == std::wstring::npos) {
+      std::fprintf(stderr, "FAIL: GUI hash comparison rejected hex case form %d\n", form);
+      return false;
+    }
+  }
+  SetDlgItemTextW(window, IDC_EDIT_HASH, L"");
   const auto settings_timer = SetTimer(nullptr, 0, 100, inspect_settings);
   if (!settings_timer) return false;
   SendMessageW(window, WM_COMMAND, MAKEWPARAM(IDC_BUTTON_SETTINGS, BN_CLICKED),

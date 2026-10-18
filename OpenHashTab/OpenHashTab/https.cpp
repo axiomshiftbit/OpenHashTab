@@ -28,6 +28,15 @@ HTTPResult DoHTTPS(const HTTPRequest& r) {
   );
 
   if (session) {
+    // These requests are initiated from dialogs. Do not use WinHTTP's
+    // infinite DNS timeout or minute-long connection timeout when offline.
+    if (!WinHttpSetTimeouts(session, 10000, 10000, 15000, 15000)) {
+      result.error_code = GetLastError();
+      result.error_location = 9;
+      WinHttpCloseHandle(session);
+      return result;
+    }
+
     // Specify an HTTP server.
     const auto connection = WinHttpConnect(
       session,

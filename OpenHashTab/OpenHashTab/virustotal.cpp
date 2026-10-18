@@ -97,10 +97,10 @@ std::list<vt::Result> vt::Query(const std::list<FileHashTask*>& files, size_t al
 
   if (reply.error_code)
     throw std::runtime_error(utl::FormatString(
-      "Error %08X at %d: %ls",
+      "Error %08X at %d: %s",
       reply.error_code,
       reply.error_location,
-      utl::ErrorToString(reply.error_code).c_str()
+      utl::WideToUTF8(utl::ErrorToString(reply.error_code).c_str()).c_str()
     ));
 
   if (reply.http_code != 200)
@@ -147,7 +147,11 @@ std::list<vt::Result> vt::Query(const std::list<FileHashTask*>& files, size_t al
         if (j_total && json_getType(j_total) == JSON_INTEGER)
           res.total = static_cast<int>(json_getInteger(j_total));
       }
-      result_map[json_getValue(j_hash)] = res;
+      std::string hash = json_getValue(j_hash);
+      for (auto& c : hash)
+        if (c >= 'a' && c <= 'f')
+          c = static_cast<char>(c - 'a' + 'A');
+      result_map[hash] = res;
     }
 
     j_child = json_getSibling(j_child);
