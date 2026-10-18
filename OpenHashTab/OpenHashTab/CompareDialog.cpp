@@ -155,7 +155,7 @@ void CompareDialog::Poll() {
   SendMessageW(list, WM_SETREDRAW, TRUE, 0);
   InvalidateRect(list, nullptr, TRUE);
   auto summary = utl::FormatString(utl::GetString(IDS_COMPARE_SUMMARY).c_str(), matches, differences, missing, errors);
-  if (oht::ResultExitCode(_rows) == 4) summary += L" · " + utl::GetString(IDS_CANCELLED);
+  if (oht::ResultExitCode(_rows) == 4) summary += L" \u00b7 " + utl::GetString(IDS_CANCELLED);
   SetDlgItemTextW(_hwnd, IDC_COMPARE_SUMMARY, summary.c_str());
 }
 

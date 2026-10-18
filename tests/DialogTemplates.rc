@@ -1,5 +1,12 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 #include <windows.h>
+#include "../OpenHashTab/OpenHashTab/resource.h"
+
+STRINGTABLE
+BEGIN
+  IDS_PROGRESS_SPEED "%s/s"
+  IDS_PROGRESS_ETA "remaining ~%s"
+END
 
 101 DIALOG 0, 0, 120, 60
 STYLE DS_SETFONT | WS_CHILD

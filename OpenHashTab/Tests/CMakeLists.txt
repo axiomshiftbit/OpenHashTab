@@ -4,7 +4,7 @@ add_executable(CoreTests ../../tests/CoreTests.cpp ../../tests/DialogTemplates.r
     ${APP}/base64.cpp ${APP}/utl.cpp ${APP}/SumFileParser.cpp ${APP}/path.cpp
     ${APP}/Settings.cpp ${APP}/Coordinator.cpp ${APP}/FileHashTask.cpp
     ${APP}/Queues.cpp ${APP}/Exporter.cpp ${APP}/virustotal.cpp ${APP}/updatecheck.cpp
-    ${APP}/Report.cpp ${APP}/ReportUI.cpp)
+    ${APP}/Report.cpp ${APP}/ReportUI.cpp ${APP}/ProgressText.cpp)
 target_include_directories(CoreTests PRIVATE ${APP})
 target_precompile_headers(CoreTests PRIVATE ${APP}/stdafx.h)
 if(CMAKE_DISABLE_PRECOMPILE_HEADERS)

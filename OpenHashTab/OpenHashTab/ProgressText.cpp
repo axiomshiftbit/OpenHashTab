@@ -20,7 +20,7 @@ std::wstring ProgressText(oht::ProgressSnapshot progress, uint64_t elapsed_ms, b
       const auto remaining = std::wstring(estimate.seconds_remaining > limit ? L"> " : L"") +
           utl::FormatString(L"%llu:%02u:%02u", seconds / 3600,
           static_cast<unsigned>(seconds / 60 % 60), static_cast<unsigned>(seconds % 60));
-      result += L" · " + utl::FormatString(utl::GetString(IDS_PROGRESS_ETA).c_str(), remaining.c_str());
+      result += L" \u00b7 " + utl::FormatString(utl::GetString(IDS_PROGRESS_ETA).c_str(), remaining.c_str());
     }
   }
   return result;

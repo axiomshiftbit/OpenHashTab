@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 #include "Coordinator.h"
 #include "ReportUI.h"
+#include "ProgressText.h"
 #include "FileHashTask.h"
 #include "SumFileParser.h"
 #include "Exporter.h"
@@ -601,11 +602,24 @@ static void clipboard() {
   check(utl::SetClipboardText(window, {}) == ERROR_SUCCESS && utl::GetClipboardText(window).empty(), "empty clipboard text");
   DestroyWindow(window);
 }
+static void progress_text() {
+  check(ProgressText({1048576, 4194304}, 1000, false) ==
+      L"1.0 MiB / 4.0 MiB\n1.0 MiB/s \u00b7 remaining ~0:00:03",
+      "progress text uses a single Unicode separator and formats speed/ETA");
+  check(ProgressText({1048576, 4194304}, 499, false) == L"1.0 MiB / 4.0 MiB",
+      "initial progress omits unstable estimates");
+  check(ProgressText({1048576, 4194304}, 1000, true) == L"1.0 MiB / 4.0 MiB\n1.0 MiB/s",
+      "cancelled progress retains speed but omits ETA");
+  check(ProgressText({4194304, 4194304}, 1000, true) == L"4.0 MiB / 4.0 MiB\n4.0 MiB/s",
+      "completed progress formats the full size without ETA");
+  std::puts("PASS: rendered progress text, Unicode separator, startup, cancellation and completion");
+}
 int main() {
   SetErrorMode(SEM_FAILCRITICALERRORS | SEM_NOGPFAULTERRORBOX);
   try {
     root = std::filesystem::temp_directory_path() / (L"OpenHashTabTests-" + std::to_wstring(GetCurrentProcessId()));
     std::filesystem::create_directories(root);
+    progress_text();
     network_responses();
     ownership();
     hashing();
