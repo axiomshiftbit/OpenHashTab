@@ -26,9 +26,13 @@ add_compile_options(
         /GR-
         /GS-
         /EHs-c-
-        /guard:cf,nochecks
         /Zi
 )
+if(CMAKE_C_COMPILER_ID STREQUAL "MSVC")
+    add_compile_options(/guard:cf)
+else()
+    add_compile_options(/guard:cf,nochecks)
+endif()
 
 add_compile_definitions(
         _CRTIMP=
