@@ -36,7 +36,7 @@ jobs:
         with:
           persist-credentials: false
       - name: Initialize workflow analysis
-        uses: github/codeql-action/init@f051dc808ef3645eb0d08647ec751634ec2304ac
+        uses: github/codeql-action/init@6f2ac81f5cd81fe351a197ba0b00d91d03cd2aee
         with:
           languages: actions
           queries: security-extended
@@ -105,7 +105,7 @@ jobs:
           ./tests/Test-BehaviorEvents.ps1
       - name: Initialize CodeQL for compiled C/C++
         id: codeql
-        uses: github/codeql-action/init@f051dc808ef3645eb0d08647ec751634ec2304ac
+        uses: github/codeql-action/init@6f2ac81f5cd81fe351a197ba0b00d91d03cd2aee
         with:
           languages: c-cpp
           build-mode: manual
