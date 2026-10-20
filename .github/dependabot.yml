@@ -2,5 +2,8 @@ version: 2
 updates:
   - package-ecosystem: "github-actions"
     directory: "/"
+    # Keep dependency updates available without spending CI minutes automatically.
+    commit-message:
+      prefix: "[skip ci]"
     schedule:
       interval: "daily"
