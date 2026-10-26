@@ -46,7 +46,7 @@ jobs:
               & cmd.exe /d /c "build\probe-$arch.cmd"
               if ($LASTEXITCODE -ne 0) { throw "MSVC probe failed: $arch" }
           }
-      - uses: github/codeql-action/analyze@6f2ac81f5cd81fe351a197ba0b00d91d03cd2aee
+      - uses: github/codeql-action/analyze@9b3254085494b55a0f7c4c2b3d2d52cc712ce370
         with:
           upload: never
           output: ${{ runner.temp }}/probe-results

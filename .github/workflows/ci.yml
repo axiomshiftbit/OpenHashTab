@@ -41,7 +41,7 @@ jobs:
           languages: actions
           queries: security-extended
       - name: Analyze GitHub Actions
-        uses: github/codeql-action/analyze@6f2ac81f5cd81fe351a197ba0b00d91d03cd2aee
+        uses: github/codeql-action/analyze@9b3254085494b55a0f7c4c2b3d2d52cc712ce370
         with:
           category: /language:actions
           output: ${{ runner.temp }}/codeql-actions
@@ -135,7 +135,7 @@ jobs:
           ./build_all.ps1 -DisablePrecompiledHeaders -Compiler MSVC
       - name: Analyze compiled C/C++ with CodeQL
         id: codeql_analysis
-        uses: github/codeql-action/analyze@6f2ac81f5cd81fe351a197ba0b00d91d03cd2aee
+        uses: github/codeql-action/analyze@9b3254085494b55a0f7c4c2b3d2d52cc712ce370
         with:
           category: /language:c-cpp
           output: ${{ runner.temp }}/codeql-results
