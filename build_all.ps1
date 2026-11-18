@@ -257,7 +257,7 @@ Write-Host "Building OpenHashTab $OhtVersion with $Compiler"
 
 New-Item -Path "install" -ItemType Directory -Force
 New-Item -Path "install\algorithms" -ItemType Directory -Force
-$AlgorithmsInstallDir = (Get-Item "install\algorithms").FullName;
+$AlgorithmsInstallDir = (New-Item -Path "build\$Compiler\installed-algorithms" -ItemType Directory -Force).FullName;
 
 "x86", "SSE2", "AVX2", "AVX512", "ARM64" | ForEach-Object {
     If ($_ -eq "x86") {
@@ -268,7 +268,8 @@ $AlgorithmsInstallDir = (Get-Item "install\algorithms").FullName;
         $Environment = $x64_Environment;
     }
 
-    $BuildDir = "build\algorithms-$_";
+    # Keep independent CMake caches and object files for each compiler.
+    $BuildDir = "build\$Compiler\algorithms-$_";
 
     Set-Environment $Environment;
     $Mt = (Get-Command "mt").Path;
@@ -279,6 +280,8 @@ $AlgorithmsInstallDir = (Get-Item "install\algorithms").FullName;
         --install-prefix $AlgorithmsInstallDir `
         "-DOHT_FLAVOR=$_" `
         "-DCMAKE_BUILD_TYPE=Release" `
+        "-DCMAKE_C_COMPILER=$((Get-Command $Env:CC).Path)" `
+        "-DCMAKE_CXX_COMPILER=$((Get-Command $Env:CXX).Path)" `
         "-DCMAKE_MAKE_PROGRAM=$Ninja" `
         "-DCMAKE_MT=$Mt"
     & $Cmake --build $BuildDir
@@ -286,6 +289,9 @@ $AlgorithmsInstallDir = (Get-Item "install\algorithms").FullName;
 
     If ($Env:AUTHENTICODE_SIGN) {
         & $Env:AUTHENTICODE_SIGN "$((Get-Item "$AlgorithmsInstallDir\AlgorithmsDll_$_.dll").FullName)"
+    }
+    foreach ($extension in 'dll', 'lib', 'pdb') {
+        Copy-Item -LiteralPath "$AlgorithmsInstallDir\AlgorithmsDll_$_.$extension" -Destination "install\algorithms" -Force
     }
 }
 
@@ -302,7 +308,8 @@ $OhtVersionNumeric = "$OhtVersionMajor.$OhtVersionMinor.$OhtVersionPatch";
 
     $Platform = $Environment["Platform"];
 
-    $BuildDir = "build\oht-$_";
+    $BuildDir = "build\$Compiler\oht-$_";
+    $ArtifactDir = "build\oht-$_";
 
     Set-Environment $Environment;
     $Mt = (Get-Command "mt").Path;
@@ -311,6 +318,8 @@ $OhtVersionNumeric = "$OhtVersionMajor.$OhtVersionMinor.$OhtVersionPatch";
         -S OpenHashTab `
         -B $BuildDir `
         "-DCMAKE_BUILD_TYPE=Release" `
+        "-DCMAKE_C_COMPILER=$((Get-Command $Env:CC).Path)" `
+        "-DCMAKE_CXX_COMPILER=$((Get-Command $Env:CXX).Path)" `
         "-DCMAKE_MAKE_PROGRAM=$Ninja" `
         "-DCMAKE_MT=$Mt" `
         "-DOHT_ALGORITHMS_INSTALL_DIR=$AlgorithmsInstallDir" `
@@ -335,6 +344,19 @@ $OhtVersionNumeric = "$OhtVersionMajor.$OhtVersionMinor.$OhtVersionPatch";
     if ($_ -ne "arm64") {
         & $Ctest --test-dir $BuildDir --output-on-failure --timeout 180
     }
+    # WiX and the CI artifact layout use the same public paths for both compilers.
+    foreach ($subdir in @('.', 'Tests')) {
+        $source = Join-Path $BuildDir $subdir
+        $target = (New-Item -Path (Join-Path $ArtifactDir $subdir) -ItemType Directory -Force).FullName
+        $products = if ($subdir -eq 'Tests') {
+            '^(CoreTests|EncodingTests|ExtendedHashTests|ReportTests|BatchTests|ShellTests)\.exe$'
+        } else {
+            '^(OpenHashTab(32|64)\.(dll|pdb)|(OpenHashTabCLI|StandaloneStub|Benchmark)\.(exe|pdb))$'
+        }
+        Get-ChildItem -LiteralPath $source -File |
+            Where-Object { $_.Name -match $products -or $_.Name -match '^AlgorithmsDll_(x86|SSE2|AVX2|AVX512|ARM64)\.dll$' } |
+            Copy-Item -Destination $target -Force
+    }
     $BuildDir32 = "build\oht-x86";
 
     "User", "Machine" | ForEach-Object {
@@ -342,7 +364,7 @@ $OhtVersionNumeric = "$OhtVersionMajor.$OhtVersionMinor.$OhtVersionPatch";
             -c $_ `
             "-property:ProductVersion=$OhtVersionNumeric" `
             "-property:BuildDirectory32=$((Get-Item $BuildDir32).FullName)" `
-            "-property:BuildDirectory=$((Get-Item $BuildDir).FullName)" `
+            "-property:BuildDirectory=$((Get-Item $ArtifactDir).FullName)" `
             "-property:AlgorithmsDllsDirectory=$AlgorithmsInstallDir" `
     }
 }
