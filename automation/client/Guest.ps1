@@ -33,23 +33,31 @@ try {
         # Install the current cumulative update using Microsoft's Windows Update API.
         # Do not upgrade the feature version: each matrix entry must keep its identity.
         if ([int]$version.UBR -lt 9711) {
+            if (Test-Path "$root\update-installed") { throw "The cumulative update did not raise the build: UBR $($version.UBR)." }
             $session = New-Object -ComObject Microsoft.Update.Session
             $search = $session.CreateUpdateSearcher().Search("IsInstalled=0 and IsHidden=0 and Type='Software'")
             $updates = New-Object -ComObject Microsoft.Update.UpdateColl
             foreach ($update in $search.Updates) {
-                if ($update.KBArticleIDs -contains '5127648') {
+                # The October 2026 cumulative update (KB5127648), or the monthly cumulative
+                # update that supersedes it once it is no longer offered. Titles are localized,
+                # so match the Security Updates classification and exclude optional previews.
+                $security = @($update.Categories | Where-Object { $_.CategoryID -eq '0fa1201d-4330-4fa8-8ae9-b877473b6441' }).Count -gt 0
+                $cumulative = $security -and -not $update.BrowseOnly -and $update.AutoSelectOnWebSites -and
+                    $update.Title -match 'Windows 11' -and $update.Title -notmatch '\.NET|Framework'
+                if ($update.KBArticleIDs -contains '5127648' -or $cumulative) {
                     if (-not $update.EulaAccepted) { $update.AcceptEula() }
                     [void]$updates.Add($update)
                     Write-Host "Installing cumulative update: $($update.Title)"
                 }
             }
-            if ($updates.Count -eq 0) { throw 'The required October 2026 cumulative update was not offered.' }
+            if ($updates.Count -eq 0) { throw 'No cumulative update for this Windows 11 version was offered.' }
             $downloader = $session.CreateUpdateDownloader(); $downloader.Updates = $updates
             $download = $downloader.Download()
             if ($download.ResultCode -ne 2) { throw "Windows Update download failed: $($download.ResultCode)" }
             $installer = $session.CreateUpdateInstaller(); $installer.Updates = $updates
             $installed = $installer.Install()
             if ($installed.ResultCode -ne 2) { throw "Windows Update installation failed: $($installed.ResultCode)" }
+            Set-Content "$root\update-installed" ($updates | ForEach-Object { $_.Title })
             Set-ItemProperty 'HKCU:\Software\Microsoft\Windows\CurrentVersion\RunOnce' 'OpenHashTabTests' 'powershell.exe -NoProfile -ExecutionPolicy Bypass -File C:\OEM\Guest.ps1'
             $null = Stop-Transcript
             Restart-Computer -Force
