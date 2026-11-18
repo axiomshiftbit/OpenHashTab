@@ -295,6 +295,7 @@ static constexpr uint64_t as_param[] = {Params...};
 LegacyHashAlgorithm::AlgorithmsType& LegacyHashAlgorithm::Algorithms() {
   // these are what I found with a quick FTP search
   static const char* const no_exts[] = {nullptr};
+  static const char* const crc32_exts[] = {"crc32", "sfv", nullptr};
   static const char* const md5_exts[] = {"md5", "md5sum", "md5sums", nullptr};
   static const char* const ripemd160_exts[] = {"ripemd160", nullptr};
   static const char* const sha1_exts[] = {"sha1", "sha1sum", "sha1sums", nullptr};
@@ -352,7 +353,7 @@ LegacyHashAlgorithm::AlgorithmsType& LegacyHashAlgorithm::Algorithms() {
 
   static LegacyHashAlgorithm algorithms[] =
     {
-      {"CRC32", 4, no_exts, "CRC32"},
+      {"CRC32", 4, crc32_exts, "CRC32"},
       {"CRC64", 8, no_exts, "CRC64"},
       {"XXH32", 4, xxh32_exts, "XXH32"},
       {"XXH64", 8, xxh64_exts, "XXH64"},

@@ -291,34 +291,104 @@ std::wstring utl::SaveDialog(HWND hwnd, const wchar_t* defpath, const wchar_t* d
 }
 
 DWORD utl::SaveMemoryAsFile(const wchar_t* path, const void* p, size_t size) {
-  const auto h = CreateFileW(
-    MakePathLongCompatible(path).c_str(),
-    GENERIC_WRITE,
-    0,
-    nullptr,
-    CREATE_ALWAYS,
-    FILE_ATTRIBUTE_NORMAL,
-    nullptr
-  );
-
-  DWORD error = ERROR_SUCCESS;
-
-  if (h == INVALID_HANDLE_VALUE) {
-    error = GetLastError();
-    return error;
+  auto target = MakePathLongCompatible(path);
+  auto slash = target.find_last_of(L'\\');
+  if (slash == target.npos || slash + 1 == target.size() || target.find(L':', slash + 1) != target.npos)
+    return ERROR_INVALID_NAME;
+  auto attributes = GetFileAttributesW(target.c_str());
+  const bool replacing = attributes != INVALID_FILE_ATTRIBUTES;
+  if (!replacing) {
+    const auto error = GetLastError();
+    if (error != ERROR_FILE_NOT_FOUND) return error;
+  } else {
+    // Publish at the target of a file link, preserving the link itself.
+    if (attributes & FILE_ATTRIBUTE_REPARSE_POINT) {
+      const auto link = CreateFileW(target.c_str(), FILE_READ_ATTRIBUTES,
+        FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE, nullptr, OPEN_EXISTING, 0, nullptr);
+      if (link == INVALID_HANDLE_VALUE) return GetLastError();
+      const auto length = GetFinalPathNameByHandleW(link, nullptr, 0, FILE_NAME_NORMALIZED);
+      DWORD error = length ? ERROR_SUCCESS : GetLastError();
+      if (!error) {
+        target.resize(length);
+        const auto written = GetFinalPathNameByHandleW(link, target.data(), length, FILE_NAME_NORMALIZED);
+        if (!written) error = GetLastError();
+        else if (written >= length) error = ERROR_INSUFFICIENT_BUFFER;
+        else target.resize(written);
+      }
+      CloseHandle(link);
+      if (error) return error;
+      slash = target.find_last_of(L'\\');
+      attributes = GetFileAttributesW(target.c_str());
+      if (attributes == INVALID_FILE_ATTRIBUTES) return GetLastError();
+    }
+    if (attributes & (FILE_ATTRIBUTE_DIRECTORY | FILE_ATTRIBUTE_READONLY)) return ERROR_ACCESS_DENIED;
   }
 
+  GUID id{};
+  const auto hr = CoCreateGuid(&id);
+  if (FAILED(hr)) return HRESULT_CODE(hr);
+  wchar_t guid[39]{};
+  StringFromGUID2(id, guid, static_cast<int>(std::size(guid)));
+  const auto temporary = target.substr(0, slash + 1) + L".openhashtab-" + guid + L".tmp";
+  std::vector<BYTE> target_security;
+  SECURITY_ATTRIBUTES file_security{sizeof(SECURITY_ATTRIBUTES), nullptr, FALSE};
+  const auto read_security = [&](SECURITY_INFORMATION security_info) -> DWORD {
+    DWORD required{};
+    GetFileSecurityW(target.c_str(), security_info, nullptr, 0, &required);
+    if (!required) return GetLastError();
+    target_security.resize(required);
+    if (!GetFileSecurityW(target.c_str(), security_info, target_security.data(), required, &required))
+      return GetLastError();
+    file_security.lpSecurityDescriptor = target_security.data();
+    return ERROR_SUCCESS;
+  };
+  const auto create_temporary = [&] {
+    return CreateFileW(temporary.c_str(), GENERIC_WRITE, 0, replacing ? &file_security : nullptr,
+      CREATE_NEW, FILE_ATTRIBUTE_NORMAL, nullptr);
+  };
+  if (replacing) {
+    // Preserve the original owner, group and access rules before transferring
+    // content. Staging in the same parent preserves its inheritance context.
+    if (const auto error = read_security(OWNER_SECURITY_INFORMATION | GROUP_SECURITY_INFORMATION | DACL_SECURITY_INFORMATION))
+      return error;
+  }
+
+  auto h = create_temporary();
+  if (h == INVALID_HANDLE_VALUE && replacing && GetLastError() == ERROR_INVALID_OWNER) {
+    // A caller may modify a file whose owner it cannot assign (for example an
+    // unelevated user and an Administrators-owned file): keep the access rules.
+    if (const auto error = read_security(DACL_SECURITY_INFORMATION)) return error;
+    h = create_temporary();
+  }
+  if (h == INVALID_HANDLE_VALUE) return GetLastError();
+
+  DWORD error = ERROR_SUCCESS;
+  if (replacing) {
+    // Copy the existing streams and attributes before changing the main stream.
+    // Publishing by a same-directory rename also preserves the staged DACL.
+    if (!CloseHandle(h)) error = GetLastError();
+    h = INVALID_HANDLE_VALUE;
+    if (!error && !CopyFileExW(target.c_str(), temporary.c_str(), nullptr, nullptr, nullptr, 0))
+      error = GetLastError();
+    if (!error) {
+      h = CreateFileW(temporary.c_str(), GENERIC_WRITE, 0, nullptr, OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, nullptr);
+      if (h == INVALID_HANDLE_VALUE) error = GetLastError();
+    }
+  }
   const auto data = static_cast<const uint8_t*>(p);
-  for (size_t offset = 0; offset < size;) {
+  for (size_t offset = 0; !error && offset < size;) {
     const auto count = static_cast<DWORD>(std::min<size_t>(size - offset, 1024 * 1024));
     DWORD written{};
     if (!WriteFile(h, data + offset, count, &written, nullptr)) { error = GetLastError(); break; }
     if (!written) { error = ERROR_WRITE_FAULT; break; }
     offset += written;
   }
+  if (!error && replacing && !SetEndOfFile(h)) error = GetLastError();
   if (!error && !FlushFileBuffers(h)) error = GetLastError();
-
-  CloseHandle(h);
+  if (h != INVALID_HANDLE_VALUE && !CloseHandle(h) && !error) error = GetLastError();
+  const DWORD move_flags = MOVEFILE_WRITE_THROUGH | (replacing ? MOVEFILE_REPLACE_EXISTING : 0);
+  if (!error && !MoveFileExW(temporary.c_str(), target.c_str(), move_flags)) error = GetLastError();
+  if (error) DeleteFileW(temporary.c_str());
   return error;
 }
 

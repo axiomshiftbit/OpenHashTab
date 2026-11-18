@@ -57,6 +57,22 @@ static std::wstring NormalizePath(std::wstring_view path) {
   }
 }
 
+static bool SidecarEntryNamesFile(const std::string& name, const std::wstring& normalized) {
+  if (name.empty()) return true; // A bare digest applies to the file beside this sidecar.
+
+  // Join against a DOS/UNC path so a root-relative entry keeps the correct drive.
+  std::wstring file = normalized;
+  if (file.starts_with(L"\\\\?\\UNC\\")) file = L"\\\\" + file.substr(8);
+  else if (file.starts_with(L"\\\\?\\")) file.erase(0, 4);
+  const auto candidate = (std::filesystem::path(file).parent_path() / utl::UTF8ToWide(name.c_str())).lexically_normal();
+  const auto path = utl::MakePathLongCompatible(candidate.wstring());
+  if (path == normalized) return true;
+  if (CompareStringOrdinal(path.c_str(), -1, normalized.c_str(), -1, TRUE) != CSTR_EQUAL) return false;
+  // A case-sensitive directory can contain two files distinguished only by case.
+  std::error_code error;
+  return std::filesystem::equivalent(path, normalized, error);
+}
+
 ProcessedFileList ProcessEverything(std::list<std::wstring> list, const Settings* settings) {
   ProcessedFileList pfl;
 
@@ -150,15 +166,9 @@ ProcessedFileList ProcessEverything(std::list<std::wstring> list, const Settings
     else
       relative_path = normalized;
 
-    const auto exist = pfl.files.find(normalized);
-    if (exist != pfl.files.end())
-      exist->second.expected_hashes.emplace_back(entry.second);
-    else {
-      ProcessedFileList::FileInfo fi;
-      fi.relative_path = std::move(relative_path);
-      fi.expected_hashes.emplace_back(entry.second);
-      pfl.files[normalized] = fi;
-    }
+    auto& fi = pfl.files[normalized];
+    fi.relative_path = std::move(relative_path);
+    fi.expected_hashes.push_back({pfl.sumfile_type, entry.second});
   }
 
   for (const auto& file : list) {
@@ -213,8 +223,9 @@ not_a_directory:
               // we ignore the error returned, result will just be empty
               TryParseSumFile(handle, fsl);
               CloseHandle(handle);
-              for (const auto& sum : fsl)
-                fi.expected_hashes.push_back(sum.second);
+              for (auto& sum : fsl)
+                if (SidecarEntryNamesFile(sum.first, normalized))
+                  fi.expected_hashes.push_back({static_cast<int>(i), std::move(sum.second)});
             }
           }
         }

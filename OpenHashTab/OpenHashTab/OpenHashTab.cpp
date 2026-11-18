@@ -274,6 +274,8 @@ HRESULT COpenHashTabShlExt::InvokeCommand(
   _In_ CMINVOKECOMMANDINFO* pici
 ) {
   if (IS_INTRESOURCE(pici->lpVerb) && (UINT)(UINT_PTR)pici->lpVerb == 0) {
+    // The modeless window outlives this object: keep the DLL loaded until it closes.
+    _AtlModule.Lock();
     const auto coordinator = new WindowedCoordinator(_files_raw);
 
     const auto dialog = wnd::CreateDialogFromChildDialogResourceParam(
@@ -315,6 +317,12 @@ HRESULT COpenHashTabShlExt::GetCommandString(
   }
 
   return E_INVALIDARG;
+}
+
+void WindowedCoordinator::UnregisterWindow() {
+  Coordinator::UnregisterWindow();
+  delete this;
+  _AtlModule.Unlock(); // Taken by COpenHashTabShlExt::InvokeCommand.
 }
 
 // Used to determine whether the DLL can be unloaded by OLE.

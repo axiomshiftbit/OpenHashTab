@@ -95,8 +95,5 @@ public:
   using Coordinator::Coordinator;
   ~WindowedCoordinator() override = default;
 
-  void UnregisterWindow() override {
-    Coordinator::UnregisterWindow();
-    delete this;
-  }
+  void UnregisterWindow() override;
 };

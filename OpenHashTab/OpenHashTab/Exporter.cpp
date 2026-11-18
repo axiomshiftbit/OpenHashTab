@@ -100,7 +100,7 @@ std::string SFVExporter::GetExportString(
   std::sort(files_copy.begin(), files_copy.end(), SortByName);
 
   for (const auto file : files_copy) {
-    if (file->GetError())
+    if (file->GetError() || file->GetHashResult()[crc32].empty())
       continue;
     auto filename = utl::WideToUTF8(file->GetDisplayName().c_str());
     if (settings->sumfile_forward_slashes)
@@ -157,8 +157,10 @@ static std::string GetExportStringSumfile(
     if (forward_slashes)
       std::replace(begin(filename), end(filename), '\\', '/');
     const auto write_hash = [&](size_t idx) {
+      const auto& result = file->GetHashResult()[idx];
+      if (result.empty()) return;
       char hash[LegacyHashAlgorithm::k_max_size * 2 + 1];
-      utl::HashBytesToString(hash, file->GetHashResult()[idx], uppercase);
+      utl::HashBytesToString(hash, result, uppercase);
       if (dot_hash_compatible)
         ss << "#" << hash_name_dothash[idx] << "#" << filename_original << "#1970.01.01@00.00:00" << line_end; // ISO8601 or gtfo
       ss << hash << separator << filename << line_end;
@@ -167,8 +169,7 @@ static std::string GetExportStringSumfile(
       write_hash(algorithm);
     else
       for (auto i = 0u; i < LegacyHashAlgorithm::k_count; ++i)
-        if (settings->algorithms[i])
-          write_hash(i);
+        write_hash(i);
   }
 
   return ss.str();

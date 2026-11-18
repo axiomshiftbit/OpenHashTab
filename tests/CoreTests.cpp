@@ -13,6 +13,7 @@
 #include <filesystem>
 #include <fstream>
 #include <cstdio>
+#include <cstdlib>
 #include <winioctl.h>
 #include "AdditionalHashVectors.h"
 #include "OfficialHashVectors.h"
@@ -297,6 +298,42 @@ static void parsers() {
     check(result.size() == 1 && result.front().first == "file with spaces.bin", "SFV whitespace separators");
   }
   check(parse("\xef\xbb\xbf" "352441c2 *file.bin\n").size() == 1, "UTF-8 BOM");
+  {
+    // Probing a single large sparse file must not read its holes through the mapping.
+    const auto sparse = root / L"sparse-probe.bin";
+    const auto handle = CreateFileW(sparse.c_str(), GENERIC_READ | GENERIC_WRITE, 0, nullptr, CREATE_NEW, 0, nullptr);
+    check(handle != INVALID_HANDLE_VALUE, "create sparse sumfile probe");
+    DWORD transferred{};
+    LARGE_INTEGER tail_offset{};
+    tail_offset.QuadPart = 512LL << 20;
+    // NTFS reserves mapped holes only once the sparse file has an allocated range.
+    check(DeviceIoControl(handle, FSCTL_SET_SPARSE, nullptr, 0, nullptr, 0, &transferred, nullptr) != FALSE &&
+        SetFilePointerEx(handle, tail_offset, nullptr, FILE_BEGIN) != FALSE &&
+        WriteFile(handle, "tail\n", 5, &transferred, nullptr) != FALSE && transferred == 5,
+        "size sparse sumfile probe");
+    ULARGE_INTEGER before{}, after{};
+    check(GetDiskFreeSpaceExW(root.c_str(), &before, nullptr, nullptr) != FALSE, "free space before probe");
+    FileSumList result;
+    check(TryParseSumFile(handle, result) == ERROR_SUCCESS && result.empty(), "binary sparse file is not a sumfile");
+    // Hashing then reads the same file through the cache.
+    std::vector<char> buffer(1 << 20);
+    OVERLAPPED at{};
+    for (uint64_t offset = 0;;) {
+      at.Offset = static_cast<DWORD>(offset);
+      at.OffsetHigh = static_cast<DWORD>(offset >> 32);
+      DWORD count{};
+      if (!ReadFile(handle, buffer.data(), static_cast<DWORD>(buffer.size()), &count, &at)) {
+        check(GetLastError() == ERROR_HANDLE_EOF, "read sparse sumfile probe");
+        break;
+      }
+      if (!count) break;
+      offset += count;
+    }
+    check(GetDiskFreeSpaceExW(root.c_str(), &after, nullptr, nullptr) != FALSE, "free space after probe");
+    check(before.QuadPart < after.QuadPart + (64ULL << 20), "sumfile probe does not reserve sparse holes");
+    CloseHandle(handle);
+    std::filesystem::remove(sparse);
+  }
   check(parse("NSRBwg== *file.bin\n").size() == 1, "base64 sumfile");
   for (const auto prefix : {"352441c2 *", "352441c2  ", "NSRBwg== *", "NSRBwg==  "}) {
     const auto result = parse(std::string(prefix) + "file deadbeef\n");
@@ -345,7 +382,59 @@ static void ed2k_boundaries() {
     }
   }
 }
+static void manifest_file_and_algorithm() {
+  const auto folder = root / L"manifest-binding";
+  const auto file = folder / L"sample.bin";
+  const auto sidecar = folder / L"sample.bin.sha256";
+  const auto manifest = folder / L"checks.sha256";
+  const std::string sha = "ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad";
+  const std::string md5 = "900150983cd24fb0d6963f7d28e17f72";
+  const std::string other(64, '0');
+  const auto sha_index = LegacyHashAlgorithm::IdxByName("SHA-256");
+  const auto md5_index = LegacyHashAlgorithm::IdxByName("MD5");
+  struct ExpectedRow { const char* algorithm; std::string value; oht::ResultStatus status; };
+  const auto verify = [&](const std::filesystem::path& input, int group, std::initializer_list<ExpectedRow> expected) {
+    Coordinator c({input.wstring()});
+    for (auto& setting : c.settings.algorithms) setting.SetNoSave(false);
+    c.settings.algorithms[md5_index].SetNoSave(true);
+    c.settings.algorithms[sha_index].SetNoSave(true);
+    c.settings.sumfile_algorithm_only.SetNoSave(false);
+    c.settings.hash_sumfile_too.SetNoSave(false);
+    c.settings.look_for_sumfiles.SetNoSave(true);
+    c.AddFiles();
+    c.ProcessFiles();
+    c.WaitForCompletion();
+    check(c.GetFiles().size() == 1 && !c.GetFiles().front()->GetError(), "open manifest target");
+    check(c.GetFiles().front()->GetMatchState() == group, "manifest file verdict");
+    const auto rows = VerificationReport(c, {});
+    const auto compared = std::count_if(rows.begin(), rows.end(), [](const auto& row) { return !row.expected.empty(); });
+    check(static_cast<size_t>(compared) == expected.size(), "report compares only applicable entries");
+    for (const auto& entry : expected) {
+      check(std::any_of(rows.begin(), rows.end(), [&](const auto& row) {
+        return row.path == "sample.bin" && row.algorithm == entry.algorithm && row.expected == entry.value &&
+            row.status == entry.status && row.actual == (row.algorithm == "SHA-256" ? sha : md5);
+      }), "manifest report retains the declared algorithm, value and verdict");
+    }
+  };
+  using Status = oht::ResultStatus;
+  write(file, "abc");
+  write(folder / L"elsewhere" / L"sample.bin", "abc");
+  write(sidecar, other + " *./sample.bin\n" + sha + " *elsewhere/sample.bin\n");
+  write(folder / L"sample.bin.md5", md5 + "\n");
+  verify(file, FileHashTask::MatchState_Mismatch, {{"SHA-256", other, Status::Mismatch}, {"MD5", md5, Status::Match}});
+  write(sidecar, sha + " *sample.bin\n");
+  verify(file, sha_index, {{"SHA-256", sha, Status::Match}, {"MD5", md5, Status::Match}});
+  write(manifest, md5 + " *sample.bin\n");
+  verify(manifest, FileHashTask::MatchState_Mismatch, {{"SHA-256", md5, Status::Mismatch}});
+  write(manifest, sha + " *sample.bin\n" + other + " *sample.bin\n");
+  verify(manifest, FileHashTask::MatchState_Mismatch, {{"SHA-256", sha, Status::Match}, {"SHA-256", other, Status::Mismatch}});
+  const auto mixed = folder / L"checks.sums";
+  write(mixed, md5 + " *sample.bin\n" + sha + " *sample.bin\n");
+  verify(mixed, sha_index, {{"MD5", md5, Status::Match}, {"SHA-256", sha, Status::Match}});
+}
+
 static void file_hashing() {
+  manifest_file_and_algorithm();
   const auto tree = root / L"reparse";
   write(tree / L"target.txt", "abc");
   check(CreateSymbolicLinkW((tree / L"alias.txt").c_str(), (tree / L"target.txt").c_str(), 0) != FALSE, "create file symlink fixture");
@@ -379,6 +468,24 @@ static void file_hashing() {
     coordinator.settings.sumfile_banner.SetNoSave(false);
     const auto exported = Exporter::k_exporters.back()->GetExportString(&coordinator.settings, false, tasks);
     check(parse(exported).size() == 1, "SFV export/import round trip");
+    for (const auto extension : {L".sfv", L".crc32"}) {
+      const auto manifest = root / (std::wstring(L"checks") + extension);
+      write(manifest, exported);
+      Coordinator verify_crc({manifest.wstring()});
+      const auto crc = LegacyHashAlgorithm::IdxByName("CRC32");
+      verify_crc.settings.algorithms[crc].SetNoSave(false);
+      verify_crc.settings.hash_sumfile_too.SetNoSave(false);
+      verify_crc.AddFiles();
+      verify_crc.ProcessFiles();
+      verify_crc.WaitForCompletion();
+      check(verify_crc.GetFiles().size() == 1 && verify_crc.GetFiles().front()->GetMatchState() == crc,
+          "opening a CRC32 manifest selects CRC32 for this calculation");
+    }
+    const auto dot_hash = Exporter::k_exporters[LegacyHashAlgorithm::k_count];
+    const auto original = dot_hash->GetExportString(&coordinator.settings, false, tasks);
+    coordinator.settings.algorithms[0].SetNoSave(false);
+    check(dot_hash->GetExportString(&coordinator.settings, false, tasks) == original, "export uses the completed calculation");
+    coordinator.settings.algorithms[0].SetNoSave(true);
     for (const auto& algorithm : LegacyHashAlgorithm::Algorithms()) {
       const auto exporter = Exporter::k_exporters[algorithm.Idx()];
       const auto result = parse(exporter->GetExportString(&coordinator.settings, false, tasks));
@@ -419,6 +526,13 @@ static void file_hashing() {
   truncated.WaitForCompletion();
   check(truncated.GetFiles().front()->GetError() == ERROR_HANDLE_EOF, "short read must not produce a digest");
   for (const auto& hash : truncated.GetFiles().front()->GetHashResult()) check(hash.empty(), "failed read has no hash");
+  Coordinator growing({file.wstring()});
+  growing.AddFiles();
+  write(file, "abcd");
+  growing.ProcessFiles();
+  growing.WaitForCompletion();
+  check(growing.GetFiles().front()->GetError() == ERROR_FILE_INVALID, "a growing file must not publish a prefix digest");
+  for (const auto& hash : growing.GetFiles().front()->GetHashResult()) check(hash.empty(), "changed file has no hash");
   auto long_file = root;
   for (int i = 0; i < 12; ++i) long_file /= L"long directory with spaces";
   long_file /= L"unicode-\u0424.bin";
@@ -532,13 +646,12 @@ static void large_file_hashing() {
   CloseHandle(handle);
   if constexpr (sizeof(size_t) > 4) {
     // A single Update exposes truncated lengths/counters that chunked reads do not.
-    const auto input = utl::OpenForRead(file.wstring());
-    check(input != INVALID_HANDLE_VALUE, "open large-buffer fixture");
-    const auto mapping = CreateFileMappingW(input, nullptr, PAGE_READONLY, 0, 0, nullptr);
-    check(mapping != nullptr, "map large-buffer fixture");
-    const auto data = MapViewOfFile(mapping, FILE_MAP_READ, 0, 0, 0);
-    check(data != nullptr, "view large-buffer fixture");
     const auto size = static_cast<size_t>((1ULL << 32) + sizeof(tail) - 1);
+    // Reading a mapped sparse file can allocate its holes on NTFS. Keep the
+    // single-call input in memory and exercise file offsets with Coordinator below.
+    std::unique_ptr<char, decltype(&std::free)> data{static_cast<char*>(std::calloc(size, 1)), &std::free};
+    check(data != nullptr, "allocate large-buffer fixture");
+    std::memcpy(data.get() + size - (sizeof(tail) - 1), tail, sizeof(tail) - 1);
     const std::pair<const char*, const char*> cases[] = {
       {"CRC64", "7e3fbec98de8c6b6"},
       {"MD4", "cf1ad89acf14ad0e0cfceb7aa4597455"},
@@ -550,14 +663,11 @@ static void large_file_hashing() {
     };
     for (const auto& [name, expected] : cases) {
       const auto actual = digest(*LegacyHashAlgorithm::ByName(name),
-          std::string_view(static_cast<const char*>(data), size), size);
+          std::string_view(data.get(), size), size);
       check(actual == utl::HashStringToBytes(std::string_view(expected)),
           "single update includes the nonzero tail beyond 4 GiB");
       std::printf("PASS: %s DLL single 4 GiB + 18 byte update\n", name);
     }
-    check(UnmapViewOfFile(data) != FALSE, "unmap large-buffer fixture");
-    CloseHandle(mapping);
-    CloseHandle(input);
   }
   Coordinator coordinator({file.wstring()});
   for (auto& enabled : coordinator.settings.algorithms) enabled.SetNoSave(false);

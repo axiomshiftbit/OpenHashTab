@@ -449,8 +449,79 @@ static int windows_control() {
   std::puts("PASS: Windows-only shell control; no project DLL activation");
   return 0;
 }
+// COM may unload an in-process server as soon as DllCanUnloadNow allows it. The
+// modeless window opened from the context menu outlives every COM interface.
+static int module_lock(const wchar_t* path) {
+  if (!ok(CoInitializeEx(nullptr, COINIT_APARTMENTTHREADED), "COM initialization")) return 1;
+  const auto module = LoadLibraryExW(path, nullptr, LOAD_LIBRARY_SEARCH_DLL_LOAD_DIR | LOAD_LIBRARY_SEARCH_DEFAULT_DIRS);
+  if (!module) {
+    std::fprintf(stderr, "FAIL: load shell extension DLL (Win32 error %lu)\n", GetLastError());
+    return 1;
+  }
+  using GetClassObject = HRESULT(STDAPICALLTYPE*)(REFCLSID, REFIID, void**);
+  using CanUnloadNow = HRESULT(STDAPICALLTYPE*)();
+  const auto get_class_object = reinterpret_cast<GetClassObject>(GetProcAddress(module, "DllGetClassObject"));
+  const auto can_unload_now = reinterpret_cast<CanUnloadNow>(GetProcAddress(module, "DllCanUnloadNow"));
+  if (!get_class_object || !can_unload_now) return 1;
+  CLSID clsid{};
+  CLSIDFromString(L"{23B5BDD4-7669-42B8-9CDC-BEEBC8A5BAA9}", &clsid);
+  IClassFactory* factory{};
+  if (!ok(get_class_object(clsid, IID_PPV_ARGS(&factory)), "class factory")) return 1;
+  IShellExtInit* extension{};
+  const auto created = factory->CreateInstance(nullptr, IID_PPV_ARGS(&extension));
+  factory->Release();
+  if (!ok(created, "create shell extension")) return 1;
+  wchar_t file[32768]{};
+  GetModuleFileNameW(nullptr, file, 32768);
+  PIDLIST_ABSOLUTE absolute{};
+  if (!ok(SHParseDisplayName(file, nullptr, &absolute, 0, nullptr), "parse shell item")) return 1;
+  auto parent = ILCloneFull(absolute);
+  PCUITEMID_CHILD children[] = {ILFindLastID(absolute)};
+  ILRemoveLastID(parent);
+  IDataObject* data{};
+  if (!ok(SHCreateDataObject(parent, 1, children, nullptr, IID_PPV_ARGS(&data)), "shell data object")) return 1;
+  IContextMenu* context{};
+  if (!ok(extension->Initialize(nullptr, data, nullptr), "initialize selected file") ||
+      !ok(extension->QueryInterface(IID_PPV_ARGS(&context)), "context menu interface")) return 1;
+  const auto menu = CreatePopupMenu();
+  if (!ok(context->QueryContextMenu(menu, 0, 1, 100, CMF_NORMAL), "context menu")) return 1;
+  CMINVOKECOMMANDINFO command{};
+  command.cbSize = sizeof(command);
+  command.lpVerb = MAKEINTRESOURCEA(0);
+  command.nShow = SW_SHOWNORMAL;
+  if (!ok(context->InvokeCommand(&command), "invoke context menu command")) return 1;
+  // Explorer releases the menu objects right after InvokeCommand returns.
+  context->Release(); extension->Release(); data->Release();
+  DestroyMenu(menu);
+  CoTaskMemFree(absolute); CoTaskMemFree(parent);
+  HWND window{};
+  EnumThreadWindows(GetCurrentThreadId(), find_dialog, reinterpret_cast<LPARAM>(&window));
+  if (!window) return 1;
+  const auto while_open = can_unload_now();
+  PostMessageW(window, WM_CLOSE, 0, 0);
+  for (unsigned attempt = 0; attempt < 200 && IsWindow(window); ++attempt) {
+    MSG message{};
+    while (PeekMessageW(&message, nullptr, 0, 0, PM_REMOVE)) {
+      TranslateMessage(&message);
+      DispatchMessageW(&message);
+    }
+    Sleep(10);
+  }
+  const auto after_close = IsWindow(window) ? E_FAIL : can_unload_now();
+  std::printf("DllCanUnloadNow: window open 0x%08lx, closed 0x%08lx\n",
+      static_cast<unsigned long>(while_open), static_cast<unsigned long>(after_close));
+  if (while_open != S_FALSE || after_close != S_OK) {
+    std::fputs("FAIL: the context menu window must keep the DLL loaded until it closes\n", stderr);
+    return 1;
+  }
+  FreeLibrary(module);
+  CoUninitialize();
+  std::puts("PASS: the context menu window holds the module lock");
+  return 0;
+}
 int wmain(int argc, wchar_t** argv) {
   SetErrorMode(SEM_FAILCRITICALERRORS | SEM_NOGPFAULTERRORBOX);
+  if (argc == 3 && std::wstring(argv[1]) == L"--module-lock") return module_lock(argv[2]);
   if (argc == 2 && std::wstring(argv[1]) == L"--windows-control") return windows_control();
   if (argc == 3 && std::wstring(argv[1]) == L"--load-only") {
     const auto module = LoadLibraryExW(argv[2], nullptr, LOAD_LIBRARY_SEARCH_DLL_LOAD_DIR | LOAD_LIBRARY_SEARCH_SYSTEM32);

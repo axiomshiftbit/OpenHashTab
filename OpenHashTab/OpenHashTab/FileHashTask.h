@@ -72,6 +72,7 @@ class FileHashTask {
   ProcessedFileList::FileInfo _file_info;
 
   uint64_t _file_size{};
+  FILETIME _last_write{};
   uint64_t _current_offset{};
 
   uint64_t _file_index;
@@ -142,7 +143,7 @@ public:
   const hash_results_t& GetHashResult() const { return _hash_results; }
 
   const std::wstring& GetDisplayName() const { return _file_info.relative_path; }
-  const std::list<std::vector<uint8_t>>& GetExpectedHashes() const { return _file_info.expected_hashes; }
+  const std::list<ProcessedFileList::ExpectedHash>& GetExpectedHashes() const { return _file_info.expected_hashes; }
 
   enum : int {
     MatchState_None = -1,

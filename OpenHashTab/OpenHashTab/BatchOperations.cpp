@@ -268,7 +268,8 @@ std::vector<ResultRow> VerifySumfile(const std::wstring& path, const LegacyHashA
     const fs::path relative(wide);
     const auto unsafe = wide.empty() || relative.has_root_path() ||
         std::find(relative.begin(), relative.end(), fs::path(L"..")) != relative.end();
-    auto entry = unsafe ? Entry{} : Inspect((base / relative).wstring());
+    // Extended Win32 paths require native separators and resolved dot components.
+    auto entry = unsafe ? Entry{} : Inspect((base / relative).lexically_normal().wstring());
     if (unsafe || expected.size() != algorithm.GetSize()) entry.error = ERROR_INVALID_DATA;
     runner.AddSize(entry);
     entries.push_back(std::move(entry));

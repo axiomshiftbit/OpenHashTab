@@ -29,12 +29,20 @@ struct ProcessedFileList {
   // A Win32 path to a directory that supposedly contains all files hashed. Ends with a slash.
   std::wstring base_path;
 
+  struct ExpectedHash {
+    int algorithm; // -1 if the manifest did not identify the algorithm
+    std::vector<uint8_t> value;
+
+    bool AppliesTo(const LegacyHashAlgorithm& candidate) const {
+      return algorithm >= 0 ? algorithm == candidate.Idx() : value.size() == candidate.GetSize();
+    }
+  };
+
   struct FileInfo {
     // Path relative to base_path, absolute if base_path is not root for the file
     std::wstring relative_path;
 
-    // Expected hashes. We'll try to figure out which belongs to what algorithm
-    std::list<std::vector<uint8_t>> expected_hashes;
+    std::list<ExpectedHash> expected_hashes;
   };
 
   // Files to hash, keyed by normalized path

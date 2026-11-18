@@ -48,7 +48,10 @@ std::vector<oht::ResultRow> VerificationReport(const Coordinator& coordinator, c
       const std::string name = index >= 0 && check_against.empty() ? LegacyHashAlgorithm::Algorithms()[index].GetName() : "";
       if (!check_against.empty()) rows.push_back({path, {}, HexString(check_against), {}, status, message});
       else if (!file->GetExpectedHashes().empty()) {
-        for (const auto& value : file->GetExpectedHashes()) rows.push_back({path, name, HexString(value), {}, status, message});
+        for (const auto& expected : file->GetExpectedHashes()) {
+          const auto algorithm = expected.algorithm >= 0 ? LegacyHashAlgorithm::Algorithms()[expected.algorithm].GetName() : "";
+          rows.push_back({path, algorithm, HexString(expected.value), {}, status, message});
+        }
       } else rows.push_back({path, name, {}, {}, status, message});
       continue;
     }
@@ -58,13 +61,25 @@ std::vector<oht::ResultRow> VerificationReport(const Coordinator& coordinator, c
       std::vector<const std::vector<uint8_t>*> expected;
       if (!check_against.empty()) {
         if (check_against.size() == actual.size()) expected.push_back(&check_against);
-      } else if (coordinator.GetSumfileAlgorithm() < 0 || coordinator.GetSumfileAlgorithm() == algorithm.Idx()) {
-        for (const auto& value : file->GetExpectedHashes()) if (value.size() == actual.size()) expected.push_back(&value);
+      } else {
+        for (const auto& entry : file->GetExpectedHashes()) if (entry.AppliesTo(algorithm)) expected.push_back(&entry.value);
       }
       if (expected.empty()) rows.push_back({path, algorithm.GetName(), {}, HexString(actual), oht::ResultStatus::Computed, {}});
       for (const auto value : expected) {
         rows.push_back({path, algorithm.GetName(), HexString(*value), HexString(actual),
             *value == actual ? oht::ResultStatus::Match : oht::ResultStatus::Mismatch, {}});
+      }
+    }
+    if (check_against.empty()) {
+      const auto& algorithms = LegacyHashAlgorithm::Algorithms();
+      for (const auto& entry : file->GetExpectedHashes()) {
+        const bool reported = std::any_of(std::begin(algorithms), std::end(algorithms), [&](const auto& algorithm) {
+          return entry.AppliesTo(algorithm) && !file->GetHashResult()[algorithm.Idx()].empty();
+        });
+        if (!reported) {
+          const auto name = entry.algorithm >= 0 ? algorithms[entry.algorithm].GetName() : "";
+          rows.push_back({path, name, HexString(entry.value), {}, oht::ResultStatus::Mismatch, {}});
+        }
       }
     }
   }

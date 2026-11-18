@@ -32,6 +32,8 @@ uint8_t* FileHashTask::BlockTryAllocate() {
 
     if (p)
       return static_cast<uint8_t*>(p);
+  } else {
+    SetLastError(ERROR_SUCCESS); // Only the shared block budget is exhausted.
   }
 
   ++s_allocations_remaining;
@@ -121,6 +123,7 @@ FileHashTask::FileHashTask(Coordinator* prop_page, const std::wstring& path, Pro
   }
 
   _file_size = static_cast<uint64_t>(fi.nFileSizeHigh) << 32 | fi.nFileSizeLow;
+  _last_write = fi.ftLastWriteTime;
   _file_index = static_cast<uint64_t>(fi.nFileIndexHigh) << 32 | fi.nFileIndexLow;
 
   // TODO: use this in queue so a lot of files from a slower device can't slow down another faster device
@@ -167,6 +170,9 @@ void FileHashTask::StartProcessing() {
 }
 
 bool FileHashTask::ReadBlockAsync(uint8_t* reuse_block) {
+  // A queued task must not read again once cancelled: Coordinator::Cancel waits for it.
+  if (_cancelled && _error == ERROR_SUCCESS)
+    _error = ERROR_CANCELLED;
   if (_error != ERROR_SUCCESS) {
     if (reuse_block)
       BlockFree(reuse_block);
@@ -215,10 +221,24 @@ bool FileHashTask::ReadBlockAsync(uint8_t* reuse_block) {
       Finish();
       return true;
     }
+
+    // Out of outstanding async ios: a running read will wake the queue
+    g_read_queue.enqueue(this);
+    return false;
   }
 
-  // If we just ran out of memory or outstanding async ios, requeue
+  if (const auto error = GetLastError()) {
+    // Memory itself is exhausted; no running read is guaranteed to wake this task.
+    _error = error;
+    Finish();
+    return true;
+  }
+
+  // Every block is in use: wait in the queue
   g_read_queue.enqueue(this);
+  // Blocks released before the enqueue found the queue empty and will not wake it.
+  if (s_allocations_remaining > 0)
+    ProcessReadQueue(nullptr);
   return false;
 }
 
@@ -289,9 +309,14 @@ void FileHashTask::FinishedBlock() {
 
 void FileHashTask::Finish() {
   if (!_error) {
-    // If we expect a hash but none match, write no match to all algos
-    _match_state = _file_info.expected_hashes.empty() ? MatchState_None : MatchState_Mismatch;
-
+    BY_HANDLE_FILE_INFORMATION info{};
+    if (!GetFileInformationByHandle(_handle, &info))
+      _error = GetLastError();
+    else if (info.nFileSizeHigh != (_file_size >> 32) || info.nFileSizeLow != static_cast<DWORD>(_file_size) ||
+             CompareFileTime(&_last_write, &info.ftLastWriteTime) != 0)
+      _error = ERROR_FILE_INVALID;
+  }
+  if (!_error) {
     for (auto i = 0u; i < LegacyHashAlgorithm::k_count; ++i) {
       auto& it_result = _hash_results[i];
       auto& it_ctx = _hash_contexts[i];
@@ -299,14 +324,22 @@ void FileHashTask::Finish() {
         it_result.resize(it_ctx.GetOutputSize());
         it_ctx.Finish(it_result.data());
       }
+    }
 
-      // TODO: O(n^2) BABY HERE WE GO
-      for (const auto& expected : _file_info.expected_hashes)
-        if (_match_state != MatchState_None && it_result == expected) {
-          // secure algorithms trump insecure ones
-          if (_match_state == MatchState_Mismatch || !LegacyHashAlgorithm::Algorithms()[_match_state].IsSecure())
-            _match_state = (int)i; // TODO: store all matches somehow
+    _match_state = MatchState_None;
+    for (const auto& expected : _file_info.expected_hashes) {
+      bool matched = false;
+      for (const auto& algorithm : LegacyHashAlgorithm::Algorithms()) {
+        if (expected.AppliesTo(algorithm) && _hash_results[algorithm.Idx()] == expected.value) {
+          matched = true;
+          if (_match_state == MatchState_None || !LegacyHashAlgorithm::Algorithms()[_match_state].IsSecure())
+            _match_state = algorithm.Idx();
         }
+      }
+      if (!matched) {
+        _match_state = MatchState_Mismatch;
+        break;
+      }
     }
   }
 

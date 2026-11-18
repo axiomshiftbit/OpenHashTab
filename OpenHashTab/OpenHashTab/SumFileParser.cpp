@@ -37,19 +37,18 @@ class SumFileParser2 {
     Base64
   } _hash{HashStyle::Unknown};
 
+  // A leading '#' line ending in a CRC can be a GNU comment or an SFV filename.
+  FileSumList _possible_sfv;
+  FileSumList _files;
+
 public:
-  FileSumList files{};
+  FileSumList& Results() { return _hash == HashStyle::Unknown ? _possible_sfv : _files; }
 
   bool ProcessLine(std::string_view sv) {
     if (sv.find('\0') != std::string_view::npos)
       return false;
     if (sv.find_first_not_of("\r\n\t\f\v ") == std::string_view::npos)
       return true; // empty line
-
-    if ((_comment == CommentStyle::Unknown || _comment == CommentStyle::Hash) && sv[0] == L'#') {
-      _comment = CommentStyle::Hash;
-      return true;
-    }
 
     if ((_comment == CommentStyle::Unknown || _comment == CommentStyle::Semicolon) && sv[0] == L';') {
       _comment = CommentStyle::Semicolon;
@@ -63,7 +62,7 @@ public:
         auto hash = utl::HashStringToBytes(std::string_view{hash_str});
         if (!hash.empty() && hash.size() <= LegacyHashAlgorithm::k_max_size) {
           _hash = HashStyle::Hex;
-          files.emplace_back(file, std::move(hash));
+          _files.emplace_back(file, std::move(hash));
           return true;
         }
       }
@@ -75,7 +74,7 @@ public:
         auto hash = b64::decode(hash_str.c_str(), hash_str.size());
         if (!hash.empty() && hash.size() <= LegacyHashAlgorithm::k_max_size) {
           _hash = HashStyle::Base64;
-          files.emplace_back(file, std::move(hash));
+          _files.emplace_back(file, std::move(hash));
           return true;
         }
       }
@@ -83,17 +82,27 @@ public:
 
     if ((_hash == HashStyle::Unknown || _hash == HashStyle::Sfv)) {
       if (auto [whole, file_match, hash_str] = k_regex_sfv(sv); whole) {
-        _hash = HashStyle::Sfv;
         // According to wikipedia delimiter is always space.
         auto file = std::string(file_match);
         const auto notspace = file.find_last_not_of(' ');
         file.resize(notspace == std::string_view::npos ? 0 : notspace + 1);
         auto hash = utl::HashStringToBytes(std::string_view{hash_str});
         if (!hash.empty()) {
-          files.emplace_back(std::move(file), std::move(hash));
+          if (_hash == HashStyle::Unknown && _comment != CommentStyle::Semicolon && sv.front() == '#') {
+            _possible_sfv.emplace_back(std::move(file), std::move(hash));
+            return true;
+          }
+          _hash = HashStyle::Sfv;
+          _files.splice(_files.end(), _possible_sfv);
+          _files.emplace_back(std::move(file), std::move(hash));
           return true;
         }
       }
+    }
+
+    if ((_comment == CommentStyle::Unknown || _comment == CommentStyle::Hash) && sv.front() == '#') {
+      _comment = CommentStyle::Hash;
+      return true;
     }
 
     return false;
@@ -114,6 +123,17 @@ DWORD TryParseSumFile(HANDLE h, FileSumList& output) {
     return ERROR_SUCCESS;
 
   const auto size = static_cast<size_t>(fi.nFileSizeLow);
+
+  // Binary data is not a sumfile. Check the head with a normal read: once a file has
+  // been mapped, NTFS reserves space for sparse holes that are later read through the cache.
+  char head[4096];
+  OVERLAPPED at_start{};
+  DWORD head_size{};
+  if (!ReadFile(h, head, static_cast<DWORD>(std::min(size, sizeof(head))), &head_size, &at_start))
+    return GetLastError();
+  if (std::find(head, head + head_size, '\0') != head + head_size)
+    return ERROR_SUCCESS;
+
   const auto mapping = CreateFileMappingW(
     h,
     nullptr,
@@ -169,7 +189,13 @@ DWORD TryParseSumFile(HANDLE h, FileSumList& output) {
   auto failed = false;
   for (auto it = first; it != last;) {
     // for CRLF we just accidentally interpret an extra empty line, which is valid in all formats
-    const auto newline = std::find_if(it, last, [](char c) { return c == '\n' || c == '\r'; });
+    const auto newline = std::find_if(it, last, [](char c) { return c == '\n' || c == '\r' || c == '\0'; });
+    // A NUL means binary data. Stop before touching the rest of the view: reading a
+    // mapped sparse region makes NTFS reserve space and fails in-page when the volume is full.
+    if (newline != last && *newline == '\0') {
+      failed = true;
+      break;
+    }
     // skip empty line
     if (newline == it) {
       ++it;
@@ -187,7 +213,8 @@ DWORD TryParseSumFile(HANDLE h, FileSumList& output) {
   UnmapViewOfFile(address);
   CloseHandle(mapping);
 
-  for (const auto& file : sfp.files) {
+  auto& files = sfp.Results();
+  for (const auto& file : files) {
     if (!file.first.empty() && utl::UTF8ToWide(file.first.c_str()).empty()) {
       failed = true;
       break;
@@ -195,7 +222,7 @@ DWORD TryParseSumFile(HANDLE h, FileSumList& output) {
   }
 
   if (!failed)
-    output = std::move(sfp.files);
+    output = std::move(files);
 
   return ERROR_SUCCESS;
 }
