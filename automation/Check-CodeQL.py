@@ -37,16 +37,42 @@ CLI_READ_SOURCES = {
 }
 
 
+CLI_READ_PINS = {
+    "2.27.2": CLI_READ_SOURCES,
+    "2.27.4": {
+        **CLI_READ_SOURCES,
+        "OpenHashTab/OpenHashTab/BatchOperations.cpp": "0bd86a6444ccf98825bf5c7e44391b6e875db1d6ecaead78e1a9b78189225a59",
+        "OpenHashTab/OpenHashTab/utl.cpp": "95e36e182c591e0d54fe528cd93ae4bec3dd6d14a392bae3c805e67c0022c1c6",
+    },
+}
+# Hash the full ordered list of SARIF (URI, startLine) pairs. Each operation had
+# two distinct routes in 2.27.4, including one through the MSVC string library.
+CLI_READ_ROUTES_2274 = {
+    51: {
+        "6f1dbe25da5985daf6a5c00b135b87e93268a1a488c2581c3110d179a83c195d",
+        "82d7f3ef80cdff633d619883e8225d8edf555e25cef629f5b5ab5a0b98a0d1be",
+    },
+    258: {
+        "d9555e3ca1323f281d1bb88259e40208345fd62efee7e8164d8c79dad9c3bd16",
+        "5029b7aead8bf16f21521ea3beb3d48f867f9ab12c510000d23a1a5ae29f61b6",
+    },
+}
+
+
+def physical_point(location):
+    physical = location.get("physicalLocation", {})
+    return physical.get("artifactLocation", {}).get("uri"), physical.get("region", {}).get("startLine")
+
+
 def reviewed_cli_read(result, version, root):
     identifier = result.get("ruleId", result.get("rule", {}).get("id"))
-    if version != "2.27.2" or identifier != "cpp/path-injection" or result.get("level", "warning") != "warning":
+    if version not in CLI_READ_PINS or identifier != "cpp/path-injection" or result.get("level", "warning") != "warning":
         return False
     locations = result.get("locations", [])
     if len(locations) != 1:
         return False
-    sink = locations[0].get("physicalLocation", {})
-    if (sink.get("artifactLocation", {}).get("uri") != "OpenHashTab/OpenHashTab/BatchOperations.cpp" or
-            sink.get("region", {}).get("startLine") not in (51, 258)):
+    sink = physical_point(locations[0])
+    if sink[0] != "OpenHashTab/OpenHashTab/BatchOperations.cpp" or sink[1] not in (51, 258):
         return False
     flows = result.get("codeFlows", [])
     if not flows:
@@ -59,13 +85,16 @@ def reviewed_cli_read(result, version, root):
             steps = thread.get("locations", [])
             if not steps:
                 return False
-            source = steps[0].get("location", {}).get("physicalLocation", {})
-            if (source.get("artifactLocation", {}).get("uri") != "OpenHashTab/CLI/Main.cpp" or
-                    source.get("region", {}).get("startLine") != 61):
+            route = [physical_point(step.get("location", {})) for step in steps]
+            if route[0] != ("OpenHashTab/CLI/Main.cpp", 61) or route[-1] != sink:
                 return False
+            if version == "2.27.4":
+                signature = hashlib.sha256(json.dumps(route, separators=(",", ":")).encode()).hexdigest()
+                if signature not in CLI_READ_ROUTES_2274[sink[1]]:
+                    return False
     return all((root / path).is_file() and
                hashlib.sha256((root / path).read_bytes().replace(b"\r\n", b"\n")).hexdigest() == digest
-               for path, digest in CLI_READ_SOURCES.items())
+               for path, digest in CLI_READ_PINS[version].items())
 
 
 def reviewed_numeric_warning(notification, version, root):

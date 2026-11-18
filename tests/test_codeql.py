@@ -29,12 +29,17 @@ class CodeQLResults(unittest.TestCase):
             for path in pins:
                 (root / path).parent.mkdir(parents=True, exist_ok=True)
                 (root / path).write_bytes(source)
+            route = result["codeFlows"][0]["threadFlows"][0]["locations"]
+            route.append({"location": copy.deepcopy(result["locations"][0])})
             for line in (51, 258):
                 result["locations"][0]["physicalLocation"]["region"]["startLine"] = line
+                route[-1]["location"]["physicalLocation"]["region"]["startLine"] = line
                 self.assertTrue(gate.reviewed_cli_read(result, "2.27.2", root))
             for version in (None, "2.27.1", "2.27.3"):
                 self.assertFalse(gate.reviewed_cli_read(result, version, root))
-            changed = []
+            wrong_end = copy.deepcopy(result)
+            wrong_end["codeFlows"][0]["threadFlows"][0]["locations"][-1]["location"]["physicalLocation"]["region"]["startLine"] = 51
+            changed = [wrong_end]
             for key, values in (("ruleId", ["cpp/command-line-injection", "cpp/other"]),
                                 ("level", ["error", "note"]), ("locations", [[], result["locations"] * 2]),
                                 ("codeFlows", [[], [{}], {"threadFlows": []}])):
@@ -79,6 +84,40 @@ class CodeQLResults(unittest.TestCase):
                 del entry["results"][0]["level"]
                 entry["tool"]["driver"]["rules"][0]["defaultConfiguration"]["level"] = "error"
                 self.assertEqual(gate.findings(document), 1)
+
+    def test_2274_requires_complete_reviewed_route_and_source(self):
+        main = "OpenHashTab/CLI/Main.cpp"
+        batch = "OpenHashTab/OpenHashTab/BatchOperations.cpp"
+        util = "OpenHashTab/OpenHashTab/utl.cpp"
+        # Direct route for the caller-selected checksum file in the 2.27.4 SARIF.
+        route = [(main, 61), (main, 108), (main, 108), (main, 126), (main, 126),
+                 (batch, 253), (batch, 258), (util, 191), (util, 191),
+                 (batch, 258), (batch, 258), (batch, 258)]
+
+        def location(path, line):
+            return {"physicalLocation": {"artifactLocation": {"uri": path}, "region": {"startLine": line}}}
+
+        thread = {"locations": [{"location": location(path, line)} for path, line in route]}
+        result = {"ruleId": "cpp/path-injection", "level": "warning",
+                  "locations": [location(batch, 258)], "codeFlows": [{"threadFlows": [thread]}]}
+        source = b"fixture"
+        pins = {"fixture": hashlib.sha256(source).hexdigest()}
+        with tempfile.TemporaryDirectory() as directory, mock.patch.dict(gate.CLI_READ_PINS["2.27.4"], pins, clear=True):
+            root = pathlib.Path(directory)
+            (root / "fixture").write_bytes(source)
+            self.assertTrue(gate.reviewed_cli_read(result, "2.27.4", root))
+            self.assertFalse(gate.reviewed_cli_read(result, "2.27.2", root))
+            self.assertFalse(gate.reviewed_cli_read(result, "2.27.5", root))
+            # One unchecked thread or intermediate location invalidates the whole finding.
+            for index, replacement in ((0, location(main, 62)), (5, location(batch, 254)),
+                                       (-1, location(batch, 51))):
+                altered = copy.deepcopy(thread)
+                altered["locations"][index]["location"] = replacement
+                result["codeFlows"][0]["threadFlows"] = [thread, altered]
+                self.assertFalse(gate.reviewed_cli_read(result, "2.27.4", root))
+            result["codeFlows"][0]["threadFlows"] = [thread]
+            (root / "fixture").write_bytes(b"different")
+            self.assertFalse(gate.reviewed_cli_read(result, "2.27.4", root))
 
     def test_extension_rule_without_legacy_rule_index(self):
         sarif = {"runs": [{"tool": {"driver": {"name": "CodeQL"}, "extensions": [{"rules": [
