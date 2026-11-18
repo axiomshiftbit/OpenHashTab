@@ -38,12 +38,17 @@ try {
             $search = $session.CreateUpdateSearcher().Search("IsInstalled=0 and IsHidden=0 and Type='Software'")
             $updates = New-Object -ComObject Microsoft.Update.UpdateColl
             foreach ($update in $search.Updates) {
+                $classes = @($update.Categories | ForEach-Object { $_.Name }) -join ', '
+                Write-Host "Offered: KB$(@($update.KBArticleIDs) -join ',') | $($update.Title) | $classes | BrowseOnly=$($update.BrowseOnly) AutoSelect=$($update.AutoSelectOnWebSites)"
+            }
+            foreach ($update in $search.Updates) {
                 # The October 2026 cumulative update (KB5127648), or the monthly cumulative
-                # update that supersedes it once it is no longer offered. Titles are localized,
-                # so match the Security Updates classification and exclude optional previews.
+                # update that supersedes it once it is no longer offered. Current titles read
+                # "2026-11 Security Update (KB...) (26200.xxxx)" and may be localized, so match the
+                # Security Updates classification and the build in the title; skip optional previews.
                 $security = @($update.Categories | Where-Object { $_.CategoryID -eq '0fa1201d-4330-4fa8-8ae9-b877473b6441' }).Count -gt 0
-                $cumulative = $security -and -not $update.BrowseOnly -and $update.AutoSelectOnWebSites -and
-                    $update.Title -match 'Windows 11' -and $update.Title -notmatch '\.NET|Framework'
+                $cumulative = $security -and -not $update.BrowseOnly -and $update.Title -notmatch '\.NET|Framework' -and
+                    ($update.Title -match '\(\d{5}\.\d+\)' -or $update.Title -match 'Cumulative')
                 if ($update.KBArticleIDs -contains '5127648' -or $cumulative) {
                     if (-not $update.EulaAccepted) { $update.AcceptEula() }
                     [void]$updates.Add($update)
