@@ -12,14 +12,14 @@ To install, download one **`.msi`** file matching your Windows architecture and 
 
 | Release file | Contents and purpose |
 | --- | --- |
-| `OpenHashTab-3.1.2-source.tar.gz` | Source code for version **3.1.2**, including the pinned submodules, in a gzip-compressed tar archive. For building or studying the code; installation does not require it. |
-| `OpenHashTab-3.1.2-Windows11-candidate.zip` | A ZIP bundle of all four MSI installers below, documentation, licenses, build information and SHA-256 checksums. **Windows11** identifies the target OS; **candidate** means a release candidate. Extract it and run the appropriate MSI; this is not a portable edition. |
+| `OpenHashTab-3.1.3-source.tar.gz` | Source code for version **3.1.3**, including the pinned submodules, in a gzip-compressed tar archive. For building or studying the code; installation does not require it. |
+| `OpenHashTab-3.1.3-Windows11-candidate.zip` | A ZIP bundle of all four MSI installers below, documentation, licenses, build information and SHA-256 checksums. **Windows11** identifies the target OS; **candidate** means a release candidate. Extract it and run the appropriate MSI; this is not a portable edition. |
 | `OpenHashTab_Machine_ARM64.msi` | Windows on Arm installer for **all users**; requires administrator privileges. |
 | `OpenHashTab_Machine_x64.msi` | Intel/AMD x64 installer for **all users**; requires administrator privileges. |
 | `OpenHashTab_User_ARM64.msi` | Windows on Arm installer for **the current user**, without administrator privileges. |
 | `OpenHashTab_User_x64.msi` | Intel/AMD x64 installer for **the current user**, without administrator privileges. |
 
-**3.1.2** is the application version. MSI filenames omit the version; download them from the release you want. **`.msi`** denotes a Windows Installer package. For example, on an Intel/AMD PC, choose `OpenHashTab_User_x64.msi` for your account or `OpenHashTab_Machine_x64.msi` for everyone. You only need one installer. Release candidates are unsigned; SHA-256 checksums accompany the downloads.
+**3.1.3** is the application version. MSI filenames omit the version; download them from the release you want. **`.msi`** denotes a Windows Installer package. For example, on an Intel/AMD PC, choose `OpenHashTab_User_x64.msi` for your account or `OpenHashTab_Machine_x64.msi` for everyone. You only need one installer. Release candidates are unsigned; SHA-256 checksums accompany the downloads.
 
 Target: Windows 11 x64/ARM64. Testing also includes Windows 10 Enterprise LTSC on the local test machine; see Actions for the exact Windows 11 versions and results.
 

@@ -214,10 +214,22 @@ jobs:
           $PSNativeCommandUseErrorActionPreference = $true
           ./build_all.ps1
           if (@(Get-ChildItem install/*.msi).Count -ne 6) { throw 'The baseline must contain six installers.' }
+      - name: Fetch the published 3.1.2 installers for direct upgrade tests
+        shell: pwsh
+        run: |
+          $bundle = Join-Path $env:RUNNER_TEMP 'OpenHashTab-3.1.2-Windows11-candidate.zip'
+          curl.exe --fail --silent --show-error --location --retry 3 --output $bundle 'https://github.com/axiomshiftbit/OpenHashTab/releases/download/v3.1.2/OpenHashTab-3.1.2-Windows11-candidate.zip'
+          if ($LASTEXITCODE -ne 0) { throw 'Cannot download the published 3.1.2 installers.' }
+          if ((Get-FileHash $bundle).Hash -ne '3a7c1c64a43ca2e30c93b0514a9ada428722b83539ab6222e7f227779d0715f5') {
+            throw 'The published 3.1.2 installer bundle does not match its pinned SHA-256.'
+          }
+          Expand-Archive -LiteralPath $bundle -DestinationPath install/released-3.1.2
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: previous-installers-test-only
-          path: install/*.msi
+          path: |
+            install/*.msi
+            install/released-3.1.2/*.msi
           if-no-files-found: error
           retention-days: 1
 

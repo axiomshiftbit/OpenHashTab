@@ -147,6 +147,17 @@ foreach ($scope in @($InstallScope)) {
     Run-Msi "/x $product" "$scope-uninstall"
     Assert-Removed $product
     if (Test-Path $stub) { throw 'Uninstall left the application executable behind.' }
+
+    $released = (Get-Item "$root\baseline\released-3.1.2\OpenHashTab_${scope}_${Architecture}.msi").FullName
+    $releasedProduct = Read-MsiProperty $released 'ProductCode'
+    if ((Read-MsiProperty $released 'ProductVersion') -ne '3.1.2') { throw 'Expected the published 3.1.2 installer.' }
+    Run-Msi "/i `"$released`"" "$scope-3.1.2-baseline"
+    if ($installer.ProductState($releasedProduct) -ne 5) { throw 'The published 3.1.2 MSI did not install.' }
+    Run-Msi "/i `"$package`"" "$scope-upgrade-from-3.1.2"
+    Assert-Removed $releasedProduct
+    $null = Assert-Installed $scope $product
+    Run-Msi "/x $product" "$scope-uninstall-after-3.1.2-upgrade"
+    Assert-Removed $product
 }
 if ($Stage -eq 'BeforeReboot') {
     $package = (Get-Item "$root\installers\OpenHashTab_Machine_${Architecture}.msi").FullName
