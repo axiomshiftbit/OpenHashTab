@@ -26,7 +26,7 @@ function Get-WindowsRegistrySignature([int]$Kind, [hashtable]$Data) {
         $volume = $Matches.volume
         if ($Data.Image -notmatch '^C:\\' -or $path -ne $Data.Image.Substring(2)) { return '' }
         $target = 'BAM:' + $volume + ':own-image'
-    } elseif ($Data.Image -match '\\(ShellTests|WindowsShellControl|CoreTests)\.exe$' -and
+    } elseif ($Data.Image -match '\\(ShellTests|WindowsShellControl|CoreTests|BatchTests)\.exe$' -and
         $Kind -eq 13 -and $Data.EventType -eq 'SetValue' -and
         $Data.Details -eq 'Binary Data' -and
         $target -in @('HKLM\SOFTWARE\Microsoft\Windows NT\CurrentVersion\Notifications\Data\418A073AA3BC1C75',
@@ -34,8 +34,8 @@ function Get-WindowsRegistrySignature([int]$Kind, [hashtable]$Data) {
         # WNF_WIL_FEATURE_DEVICE_USAGE_TRACKING_1 / _2 are separate storage
         # buckets of Windows feature-use telemetry. Require this finite family
         # in the independent control, not whichever bucket the OS chose first.
-        # Windows 11 26300.9974 also records it for CoreTests' dialog and clipboard
-        # tests; the Windows-only control wrote the same bucket in that run.
+        # Windows 11 26300.9974 recorded these writes for CoreTests and x86
+        # BatchTests; their independent Windows controls recorded the same bucket.
         # Names: googleprojectzero/sandbox-attacksurface-analysis-tools,
         # 852b1586b8c4527f8be3f486801e4830220c76d0/NtCoreLib/NtWnfWellKnownNames.cs.
         $target = 'WindowsFeatureDeviceUsageTracking:1-or-2'

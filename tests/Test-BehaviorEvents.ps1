@@ -95,12 +95,13 @@ foreach ($data in @(
     $cases += @{Events=@($baseline) + (New-BehaviorEvent 13 $data); Control=$allControls; Error='Unexpected application behavior detected.'}
 }
 $cases += @{Events=@($baseline) + (New-BehaviorEvent 14 @{Image='C:\Test\CoreTests.exe'; TargetObject='HKCU\Software\OpenHashTab\Setting'; NewName='HKCU\Software\Microsoft\Windows\CurrentVersion\Run\Bad'}); Error='Unexpected application behavior detected.'}
-# CoreTests creates dialogs and uses the clipboard: Windows may record the same
-# feature-usage bucket for it, but only when the Windows-only control did too.
-$coreUsage = $registryData[1].Clone(); $coreUsage.Image = 'C:\Test\CoreTests.exe'
-$coreControl = $registryData[1].Clone(); $coreControl.Image = 'C:\Test\WindowsShellControl.exe'
-$cases += @{Events=@($baseline) + (New-BehaviorEvent 13 $coreUsage); Control=@($control) + (New-BehaviorEvent 13 $coreControl); Error=''}
-$cases += @{Events=@($baseline) + (New-BehaviorEvent 13 $coreUsage); Control=$control; Error='Unexpected application behavior detected.'}
+# These test programs also produced feature-use events observed in the control.
+$usageControl = $registryData[1].Clone(); $usageControl.Image = 'C:\Test\WindowsShellControl.exe'
+foreach ($name in @('CoreTests.exe', 'BatchTests.exe')) {
+    $usage = $registryData[1].Clone(); $usage.Image = "C:\Test\$name"
+    $cases += @{Events=@($baseline) + (New-BehaviorEvent 13 $usage); Control=@($control) + (New-BehaviorEvent 13 $usageControl); Error=''}
+    $cases += @{Events=@($baseline) + (New-BehaviorEvent 13 $usage); Control=$control; Error='Unexpected application behavior detected.'}
+}
 # Windows may choose different WIL device-usage buckets for successive GUI processes.
 foreach ($pair in @(@(1,2), @(2,1))) {
     $app = $registryData[$pair[0]].Clone()
