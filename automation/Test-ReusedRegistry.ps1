@@ -13,6 +13,9 @@ foreach ($event in $saved.control) {
 $checked = 0
 foreach ($event in $saved.registry) {
     if ($event.Image -notmatch '\\(CoreTests|EncodingTests|ExtendedHashTests|ReportTests|BatchTests|OpenHashTabCLI|ShellTests|StandaloneStub)\.exe$') { continue }
+    # Saved rows omit the rename destination. Only ordinary key/value events
+    # in the application's settings tree can use the live policy's own-key rule.
+    if ($event.Id -in @(12,13) -and (Test-OpenHashTabRegistryPath $event.Target)) { continue }
     $signature = Get-WindowsRegistrySignature $event.Id @{
         Image=$event.Image; TargetObject=$event.Target; EventType=$event.Type; Details=$event.Details
     }

@@ -71,11 +71,14 @@ function Get-WindowsControlSignatures([object[]]$Events) {
     return $controls
 }
 
+function Test-OpenHashTabRegistryPath([string]$Path) {
+    return $Path -match '^HK(U\\S-1-5-21-\d+-\d+-\d+-\d+|CU|LM)\\Software\\OpenHashTab(?:\\|$)'
+}
+
 function Get-VerifiedBehaviorCounts {
     param([object[]]$Events, [object[]]$ControlEvents)
     $images = '\\(CoreTests|EncodingTests|ExtendedHashTests|ReportTests|BatchTests|OpenHashTabCLI|ShellTests|StandaloneStub)\.exe$'
     $controls = Get-WindowsControlSignatures $ControlEvents
-    $ownRegistry = '^HK(U\\S-1-5-21-\d+-\d+-\d+-\d+|CU|LM)\\Software\\OpenHashTab(?:\\|$)'
     $counts = @{}
     $processes = @{}
     $networkControl = $false
@@ -98,9 +101,10 @@ function Get-VerifiedBehaviorCounts {
         # Sysmon paths use Windows separators even when unit tests run on Linux.
         if ($event.Id -eq 1) { $processes[$source.Substring($source.LastIndexOf('\') + 1)] = $true }
         if ($event.Id -in @(3,8,9,22)) { $failures.Add("Unexpected event $($event.Id) from $source") }
-        $ownWrite = $data.TargetObject -match $ownRegistry
-        if ($event.Id -eq 14) { $ownWrite = $ownWrite -and $data.NewName -match $ownRegistry }
-        if ($event.Id -in @(12,13,14) -and -not $ownWrite) {
+        if ($event.Id -in @(12,13,14)) {
+            $ownWrite = Test-OpenHashTabRegistryPath $data.TargetObject
+            if ($event.Id -eq 14) { $ownWrite = $ownWrite -and (Test-OpenHashTabRegistryPath $data.NewName) }
+            if ($ownWrite) { continue }
             $signature = Get-WindowsRegistrySignature $event.Id $data
             if ($signature -and $controls.ContainsKey($signature)) { $matched[$signature] = 1 + $matched[$signature] }
             else { $failures.Add("Unexpected registry write: $($data.TargetObject) from $source; $($data.EventType); $($data.Details)") }

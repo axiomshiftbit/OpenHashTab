@@ -166,6 +166,14 @@ foreach ($change in @(@{Target='HKCU\Software\Microsoft\Windows\CurrentVersion\R
     foreach ($key in $change.Keys) { $bad[$key] = $change[$key] }
     $replays += @{control=@($savedControl); registry=@($bad)}
 }
+$own = $savedApp.Clone(); $own.Target = 'HKU\S-1-5-21-1-2-3-1000\Software\OpenHashTab'
+$renamed = $own.Clone(); $renamed.Id = 14
+$other = $own.Clone(); $other.Target += 'Other'
+$replays += @{control=@($savedControl); registry=@($savedApp, $renamed)}
+$replays += @{control=@($savedControl); registry=@($savedApp, $other)}
+# Both registry creations and value writes occur alongside Windows telemetry.
+$ownKey = $own.Clone(); $ownKey.Id = 12; $ownKey.Type = 'CreateKey'
+$replays[0].registry += @($ownKey, $own)
 $snapshot = [IO.Path]::GetTempFileName()
 try {
     for ($i = 0; $i -lt $replays.Count; $i++) {
